@@ -1,0 +1,36 @@
+/* Rosé Pine Theme - All natural pine and citrus tones */
+/* https://rosepinetheme.com/ */
+/* @theme-type: dark */
+
+:root[data-theme="rose-pine"] {
+    /* Background colors */
+    --bg-primary: #191724;
+    --bg-secondary: #161320;
+    --bg-tertiary: #26233a;
+    --bg-hover: #2a273f;
+    --bg-active: #393552;
+
+    /* Text colors */
+    --text-primary: #e0def4;
+    --text-secondary: #908caa;
+    --text-tertiary: #6e6a86;
+
+    /* Border colors */
+    --border-primary: #393552;
+    --border-secondary: #26233a;
+
+    /* Accent colors */
+    --accent-primary: #c4a7e7;
+    --accent-hover: #f6c177;
+    --accent-light: rgba(196, 167, 231, 0.15);
+
+    /* Status colors */
+    --success: #31748f;
+    --error: #eb6f92;
+    --warning: #f6c177;
+
+    /* Shadows */
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.6);
+}

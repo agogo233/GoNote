@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://www.gonote.app/sitemap.xml
+

@@ -1,0 +1,43 @@
+# Code Owners for GoNote
+# https://help.github.com/en/articles/about-code-owners
+
+# Default owners for the entire repository
+* @gamosoft
+
+# Go Backend
+go/ @gamosoft
+
+# Python Backend (Legacy)
+python/ @gamosoft
+
+# Frontend
+shared/frontend/ @gamosoft
+
+# Themes
+shared/themes/ @gamosoft
+
+# Plugins
+shared/plugins/ @gamosoft
+
+# Documentation
+docs/ @gamosoft
+project-docs/ @gamosoft
+README.md @gamosoft
+CONTRIBUTING.md @gamosoft
+
+# Tests
+tests/ @gamosoft
+
+# Docker
+docker/ @gamosoft
+Dockerfile @gamosoft
+docker-compose*.yml @gamosoft
+
+# Build Configuration
+build/ @gamosoft
+Makefile @gamosoft
+tailwind.config.js @gamosoft
+
+# Security
+SECURITY.md @gamosoft
+project-docs/security/ @gamosoft

@@ -1,0 +1,42 @@
+# Git
+.git
+.gitignore
+.dockerignore
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Python
+.venv
+venv
+
+# OS
+.DS_Store
+
+# User data
+data/
+
+# Logs
+*.log
+logs/
+
+# Documentation (not needed in image)
+README.md
+CONTRIBUTING.md
+project-docs/
+docs/
+
+# Test files
+tests/
+test-results/
+playwright-report/
+
+# IDE
+.vscode/
+.idea/
+
+# AI
+.qwen/
+AGENTS.md

@@ -1,0 +1,364 @@
+{
+  "_meta": {
+    "code": "en-US",
+    "name": "English",
+    "flag": "🇺🇸"
+  },
+
+  "app": {
+    "tagline": "Your Self-Hosted Knowledge Base"
+  },
+
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "rename": "Rename",
+    "create": "Create",
+    "close": "Close",
+    "yes": "✓ Yes",
+    "no": "✗ No",
+    "ok": "OK",
+    "error": "Error",
+    "loading": "Loading...",
+    "load_more": "Load more...",
+    "saved": "✓ Saved",
+    "saving": "Saving...",
+    "copied": "Copied!",
+    "copy_to_clipboard": "Copy to clipboard",
+    "failed": "Failed to {{action}}. Please try again.",
+    "page": "Page",
+    "previous": "Previous",
+    "next": "Next",
+    "discard": "Discard",
+    "restore": "Restore"
+  },
+
+  "sidebar": {
+    "title": "FILES",
+    "favorites_title": "Favorites",
+    "folders_and_notes": "Folders & Notes",
+    "new_button": "+ New",
+    "new_note": "New Note",
+    "new_folder": "New Folder",
+    "new_from_template": "New from Template",
+    "search_placeholder": "Search notes...",
+    "search_hint": "Type to search your notes",
+    "clear_search": "Clear search",
+    "drag_hint": "💡 Drag=Move",
+    "root_folder": "📂 Root folder",
+    "no_notes": "No notes yet. Create your first note!",
+    "no_notes_yet": "No notes or folders yet.",
+    "create_first": "Create your first note or folder!",
+    "drop_to_root": "Drop here for root",
+    "no_favorites": "No favorites yet",
+    "no_results": "No results found",
+    "expand_all": "Expand all folders",
+    "collapse_all": "Collapse all folders",
+    "toggle_sidebar": "Toggle sidebar",
+    "go_to_homepage": "Go to homepage",
+    "files": "Files",
+    "search": "Search",
+    "search_title": "SEARCH",
+    "settings": "Settings",
+    "settings_title": "SETTINGS",
+    "filtered_notes": "Filtered Notes",
+    "delete_note": "Delete note",
+    "delete_file": "Delete file"
+  },
+
+  "editor": {
+    "placeholder": "Start writing in markdown...",
+    "drop_hint": "💡 Drop here to insert at cursor position...",
+    "mode_edit": "Edit",
+    "mode_split": "Split",
+    "mode_preview": "Preview",
+    "edited": "Edited {{time}}",
+    "just_now": "just now",
+    "minutes_ago": "{{count}}m ago",
+    "hours_ago": "{{count}}h ago",
+    "days_ago": "{{count}}d ago"
+  },
+
+  "notes": {
+    "confirm_delete": "Delete \"{{name}}\"?",
+    "already_exists": "A note named \"{{name}}\" already exists in this location.\nPlease choose a different name.",
+    "prompt_name": "Enter note name:",
+    "prompt_name_in_folder": "Create note in \"{{folder}}\".\nEnter note name:",
+    "prompt_name_with_path": "Enter note name (you can use folder/name):",
+    "prompt_rename": "Enter new name:",
+    "invalid_name": "Invalid note name.",
+    "empty_name": "Note name cannot be empty.",
+    "not_found": "Note not found: {{path}}",
+    "create_from_link": "Note \"{{path}}\" doesn't exist.\n\nWould you like to create it?",
+    "no_content": "No note content to export",
+    "open_first": "Please open a note first before uploading images.",
+    "save_failed": "Save failed. Content backed up locally.",
+    "unsaved_changes": "Unsaved Changes Found",
+    "restore_prompt": "Found unsaved changes for \"{name}\" from {time}. Restore them?"
+  },
+
+  "folders": {
+    "confirm_delete": "⚠️ WARNING ⚠️\n\nAre you sure you want to delete the folder \"{{name}}\"?\n\nThis will PERMANENTLY delete:\n• All notes inside this folder\n• All subfolders and their contents\n\nThis action CANNOT be undone!",
+    "already_exists": "A folder named \"{{name}}\" already exists in this location.\nPlease choose a different name.",
+    "prompt_name": "Enter folder name:",
+    "prompt_name_in_folder": "Create subfolder in \"{{folder}}\".\nEnter folder name:",
+    "prompt_name_with_path": "Create new folder.\nEnter folder path (e.g., \"Projects\" or \"Work/2025\"):",
+    "prompt_rename": "Rename folder \"{{name}}\" to:",
+    "invalid_name": "Invalid folder name.",
+    "cannot_move_into_self": "Cannot move folder into itself or its subfolder.",
+    "empty": "empty",
+    "add_item": "Add item here",
+    "rename": "Rename folder",
+    "delete": "Delete folder"
+  },
+
+  "toolbar": {
+    "undo": "Undo (Ctrl+Z)",
+    "redo": "Redo (Ctrl+Y)",
+    "delete_note": "Delete note",
+    "delete_image": "Delete image",
+    "export_html": "Export as HTML",
+    "copy_link": "Copy link to clipboard",
+    "add_favorite": "Add to favorites",
+    "add_favorite": "Add to favorites",
+    "remove_favorite": "Remove from favorites",
+    "cleanup_orphaned_media": "Cleanup orphaned media"
+  },
+
+  "zen_mode": {
+    "title": "Zen Mode",
+    "tooltip": "Zen Mode (Ctrl+Alt+Z)",
+    "exit": "Exit Zen Mode",
+    "exit_hint": "Exit Zen Mode (Esc)"
+  },
+
+  "share": {
+    "button_tooltip": "Share note",
+    "modal_title": "Share Note",
+    "not_shared_description": "This note is not currently shared. Create a link to share it with anyone.",
+    "shared_description": "Anyone with this link can view this note:",
+    "create_link": "Create Share Link",
+    "copy": "Copy",
+    "stop_sharing": "Stop Sharing",
+    "confirm_revoke": "Are you sure you want to stop sharing this note? The share link will no longer work.",
+    "error_creating": "Failed to create share link: {{error}}",
+    "error_revoking": "Failed to revoke share link: {{error}}",
+    "show_qr": "Show QR Code",
+    "hide_qr": "Hide QR Code",
+    "shared_label": "Shared"
+  },
+
+  "quick_switcher": {
+    "placeholder": "Type to search notes...",
+    "no_results": "No matching notes",
+    "recent_hint": "Showing recent notes. Type to search all.",
+    "navigate": "navigate",
+    "open": "open",
+    "close": "close"
+  },
+
+  "tags": {
+    "title": "Tags",
+    "no_tags": "No tags found",
+    "hint": "Add tags using YAML frontmatter",
+    "no_matches": "No notes match selected tags",
+    "clear_all": "Clear tag filters",
+    "filter_by": "Filter by {{tag}} ({{count}} notes)"
+  },
+
+  "outline": {
+    "title": "Outline",
+    "no_headings": "No headings found",
+    "hint": "Add headings using # syntax",
+    "toggle_outline": "Toggle outline panel"
+  },
+
+  "stats": {
+    "words": "words",
+    "reading_time": "~{{minutes}}m read",
+    "links": "{{count}} links",
+    "click_details": "▼ Click for details",
+    "characters": "Characters",
+    "reading_time_label": "Reading Time",
+    "lines": "Lines",
+    "sentences": "Sentences",
+    "lists": "Lists",
+    "tables": "Tables",
+    "links_label": "Links",
+    "internal": "internal",
+    "headings": "Headings",
+    "code_blocks": "Code Blocks",
+    "tasks": "Tasks",
+    "images": "Images",
+    "blockquotes": "Blockquotes"
+  },
+
+  "graph": {
+    "title": "Graph View",
+    "empty": "No connections to display",
+    "markdown_links": "Markdown links",
+    "click_hint": "Click: select • Double-click: open",
+    "zoom_in": "Zoom In",
+    "zoom_out": "Zoom Out",
+    "reset_view": "Reset View",
+    "wikilinks": "Wikilinks"
+  },
+
+  "templates": {
+    "title": "Templates",
+    "select": "Select a template...",
+    "prompt_name": "Enter note name:",
+    "no_templates": "No templates found. Create templates in the _templates folder.",
+    "create_failed": "Failed to create note from template",
+    "create_from_template": "Create from Template",
+    "select_template": "Select Template",
+    "choose_template": "Choose a template",
+    "note_name": "Note Name",
+    "available_placeholders": "Available placeholders",
+    "create_note": "Create Note"
+  },
+
+  "export": {
+    "failed": "Failed to export HTML: {{error}}"
+  },
+
+  "login": {
+    "title": "Login",
+    "tagline": "Your Self-Hosted Knowledge Base",
+    "password_placeholder": "Enter your password",
+    "unlock_button": "🔓 Unlock",
+    "footer": "🔒 Secure & Self-Hosted",
+    "error_incorrect_password": "Incorrect password. Please try again."
+  },
+
+  "media": {
+    "confirm_delete": "Delete \"{{name}}\"?",
+    "upload_failed": "Failed to upload file",
+    "no_valid_files": "No valid files found. Supported: JPG, PNG, GIF, WebP, MP3, MP4, PDF",
+    "formats": "JPG, PNG, GIF, MP3, MP4, PDF",
+    "cleanup_confirm": "Are you sure you want to delete {{count}} orphaned media file(s)?",
+    "cleanup_success": "Successfully deleted {{count}} orphaned media file(s)",
+    "not_found": "Media not found",
+    "attachment": "attachment",
+    "attachments": "attachments",
+    "click_to_view": "▼ Click to view"
+  },
+
+  "move": {
+    "failed_note": "Failed to move note.",
+    "failed_folder": "Failed to move folder.",
+    "failed_media": "Failed to move media file."
+  },
+
+  "search": {
+    "previous": "Previous (Shift+F3)",
+    "next": "Next (F3)",
+    "previous_match": "Previous match",
+    "next_match": "Next match",
+    "matches": "{{current}} of {{total}}",
+    "match_of": "Match {{current}} of {{total}}",
+    "result_singular": "result",
+    "result_plural": "results",
+    "no_results": "No notes contain \"{{query}}\"",
+    "searching": "Searching for \"{{query}}\"...",
+    "mode_full": "Full Text",
+    "mode_full_desc": "Search across all note content",
+    "mode_smart": "Smart",
+    "mode_smart_desc": "Title matches first, then content as fallback",
+    "mode_title": "Title Only",
+    "mode_title_desc": "Search only note titles"
+  },
+
+  "theme": {
+    "title": "Theme"
+  },
+
+  "language": {
+    "title": "Language"
+  },
+
+  "syntax_highlight": {
+    "title": "Editor Syntax Highlight",
+    "description": "Colorize markdown syntax in editor",
+    "enable": "Enable syntax highlighting",
+    "disable": "Disable syntax highlighting"
+  },
+
+  "settings": {
+    "account": "Account",
+    "logout": "Logout",
+    "logout_failed": "Logout failed. Please try again.",
+    "readable_line_length": "Readable line length",
+    "readable_line_length_desc": "Limit preview width for easier reading",
+    "hide_underscore_folders": "Hide system folders",
+    "hide_underscore_folders_desc": "Hide _attachments, _templates and other underscore folders from sidebar"
+  },
+
+  "homepage": {
+    "title": "Home",
+    "welcome": "Welcome to GoNote",
+    "get_started": "Create something to get started",
+    "no_notes_title": "No notes yet",
+    "no_notes_desc": "Create your first note or folder",
+    "folder_empty": "This folder is empty",
+    "note_singular": "note",
+    "note_plural": "notes",
+    "folder_singular": "folder",
+    "folder_plural": "folders"
+  },
+
+  "format": {
+    "bold": "Bold",
+    "italic": "Italic",
+    "strikethrough": "Strikethrough",
+    "heading": "Heading",
+    "link": "Link",
+    "image": "Image",
+    "code": "Inline code",
+    "codeblock": "Code block",
+    "quote": "Quote",
+    "bullet_list": "Bullet list",
+    "numbered_list": "Numbered list",
+    "checkbox": "Checkbox",
+    "table": "Table"
+  },
+
+  "validation": {
+    "forbidden_chars": "Name contains forbidden characters: {{chars}}",
+    "reserved_name": "This name is reserved by the operating system.",
+    "invalid_dot": "Name cannot be just a dot.",
+    "trailing_dot_space": "Name cannot end with a dot or space."
+  },
+
+  "support": {
+    "enjoying_demo": "Support this project",
+    "deploy_own": "Deploy your own instance",
+    "thank_you": "Thank you for your support! 💚"
+  },
+
+  "demo": {
+    "title": "DEMO MODE",
+    "warning": "Contents reset daily. Changes may be overwritten by other users."
+  },
+
+  "orphaned_media": {
+    "title": "Cleanup Orphaned Media",
+    "description": "Scan for media files that are not referenced in any notes.",
+    "scan_button": "Scan for Orphaned Files",
+    "found_count": "Found {{count}} orphaned files",
+    "no_files": "No orphaned media files found. All files are referenced in notes.",
+    "delete_all": "Delete All ({{count}} files)",
+    "delete_success": "Successfully deleted {{count}} files",
+    "delete_error": "Failed to delete orphaned files",
+    "scan_error": "Failed to scan for orphaned files"
+  },
+
+  "time": {
+    "just_now": "just now",
+    "minutes_ago": "{{n}} minutes ago",
+    "hours_ago": "{{n}} hours ago",
+    "days_ago": "{{n}} days ago"
+  }
+}
+

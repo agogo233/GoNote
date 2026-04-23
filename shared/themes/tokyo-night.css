@@ -1,0 +1,36 @@
+/* Tokyo Night Theme - Clean, dark theme with Tokyo-inspired neon accents */
+/* https://github.com/enkia/tokyo-night-vscode-theme */
+/* @theme-type: dark */
+
+:root[data-theme="tokyo-night"] {
+    /* Background colors */
+    --bg-primary: #1a1b26;
+    --bg-secondary: #16161e;
+    --bg-tertiary: #24283b;
+    --bg-hover: #292e42;
+    --bg-active: #3b4261;
+
+    /* Text colors */
+    --text-primary: #c0caf5;
+    --text-secondary: #a9b1d6;
+    --text-tertiary: #565f89;
+
+    /* Border colors */
+    --border-primary: #3b4261;
+    --border-secondary: #24283b;
+
+    /* Accent colors */
+    --accent-primary: #7aa2f7;
+    --accent-hover: #7dcfff;
+    --accent-light: rgba(122, 162, 247, 0.15);
+
+    /* Status colors */
+    --success: #9ece6a;
+    --error: #f7768e;
+    --warning: #e0af68;
+
+    /* Shadows */
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.6);
+}

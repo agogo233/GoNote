@@ -1,0 +1,105 @@
+services:
+  gonote-go:
+    build:
+      context: ../..
+      dockerfile: docker/go/Dockerfile
+    container_name: gonote-go
+    ports:
+      - "9000:9000"
+    volumes:
+      # 必需：笔记数据目录
+      - ./data:/app/data
+      # 可选：取消注释以自定义（文件/目录必须存在！）
+      # - ./config.yaml:/app/config.yaml
+      # - ../shared/themes:/app/themes
+      # - ../shared/plugins:/app/plugins
+      # - ../shared/locales:/app/locales
+    restart: unless-stopped
+    environment:
+      # 时区设置
+      - TZ=Asia/Shanghai
+
+      # ========== 日志配置 ==========
+      # 是否启用日志（默认：true）
+      # 设为 false 可关闭所有日志输出（启动日志、HTTP请求日志、错误日志等）
+      # - LOG_ENABLED=true
+
+      # ========== 服务器配置 ==========
+        # 服务端口（默认：9000）
+        # - PORT=9000      # 配置文件路径（默认：config.yaml）
+      # - CONFIG_PATH=config.yaml
+      # 调试模式，生产环境请设为 false（默认：false）
+      # - DEBUG=false
+      # CORS 允许的源，多个用逗号分隔（默认：*）
+      # - ALLOWED_ORIGINS=*
+
+      # ========== 存储配置 ==========
+      # 笔记数据目录（默认：./data）
+      # - STORAGE_NOTES_DIR=./data
+      # 插件目录（默认：../shared/plugins）
+      # - STORAGE_PLUGINS_DIR=../shared/plugins
+
+      # ========== 搜索配置 ==========
+      # 是否启用搜索（默认：true）
+      # - SEARCH_ENABLED=true
+
+      # ========== 认证配置 ==========
+      # 是否启用认证（默认：false）
+      # - AUTHENTICATION_ENABLED=false
+      # 登录密码（默认：admin，生产环境请修改！）
+      # - AUTHENTICATION_PASSWORD=admin
+      # 预哈希密码（使用 python generate_password.py 生成）
+      # - AUTHENTICATION_PASSWORD_HASH=
+      # 会话密钥，生产环境必须修改为随机字符串！
+      # 生成命令：python3 -c "import secrets; print(secrets.token_hex(32))"
+      # - AUTHENTICATION_SECRET_KEY=change_this_to_a_random_secret_key_in_production
+      # 安全 Cookie，使用 HTTPS 时设为 true（默认：false）
+      # 也可通过 HTTPS 或 X_FORWARDED_PROTO 环境变量自动启用
+      # - AUTHENTICATION_SECURE_COOKIE=false
+      # 会话有效期秒数（默认：604800，即 7 天）
+      # - AUTHENTICATION_SESSION_MAX_AGE=604800
+
+      # ========== HTTPS 自动检测 ==========
+      # 以下环境变量用于自动启用安全 Cookie（secure_cookie）
+      # 当检测到 HTTPS 时，会自动启用 secure_cookie
+      # - HTTPS=true
+      # 反向代理场景下的协议检测
+      # - X_FORWARDED_PROTO=https
+
+      # ========== 缓存配置 ==========
+      # 缓存过期时间秒数（默认：60）
+      # - CACHE_TTL=60
+      # 缓存最大条目数（默认：1000）
+      # - CACHE_CAPACITY=1000
+      # 后台扫描间隔秒数（默认：30）
+      # - CACHE_SCAN_INTERVAL=30
+
+      # ========== 限流配置 ==========
+      # 是否启用限流（默认：false）
+      # - RATE_LIMIT_ENABLED=false
+      # 每个时间窗口最大请求数（默认：30）
+      # - RATE_LIMIT_MAX=30
+      # 限流窗口秒数（默认：1）
+      # - RATE_LIMIT_WINDOW=1
+
+      # ========== 上传配置 ==========
+      # 单文件最大大小 MB（默认：50）
+      # - UPLOAD_MAX_FILE_SIZE_MB=50
+      # 请求体最大大小 MB（默认：100）
+      # - UPLOAD_MAX_BODY_SIZE_MB=100
+      # 允许的 MIME 类型，多个用逗号分隔（默认：空，允许所有）
+      # 示例：image/jpeg,image/png,image/gif,audio/mpeg,video/mp4,application/pdf
+      # - UPLOAD_ALLOWED_TYPES=
+
+      # ========== 演示模式 ==========
+      # 演示模式（启用后限流强制开启）
+      # - DEMO_MODE=false
+      # 已捐赠标志（隐藏捐赠提示）
+      # - ALREADY_DONATED=false
+
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9000/health"]
+      interval: 60s
+      timeout: 3s
+      retries: 3
+      start_period: 5s

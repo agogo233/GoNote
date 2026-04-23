@@ -1,0 +1,36 @@
+/* One Light Theme - Atom's signature light theme */
+/* https://github.com/atom/one-light-syntax */
+/* @theme-type: light */
+
+:root[data-theme="one-light"] {
+    /* Background colors */
+    --bg-primary: #fafafa;
+    --bg-secondary: #f0f0f0;
+    --bg-tertiary: #e5e5e6;
+    --bg-hover: #d5d5d6;
+    --bg-active: #c5c5c7;
+
+    /* Text colors */
+    --text-primary: #383a42;
+    --text-secondary: #696c77;
+    --text-tertiary: #a0a1a7;
+
+    /* Border colors */
+    --border-primary: #d5d5d6;
+    --border-secondary: #e5e5e6;
+
+    /* Accent colors */
+    --accent-primary: #4078f2;
+    --accent-hover: #325fb3;
+    --accent-light: rgba(64, 120, 242, 0.12);
+
+    /* Status colors */
+    --success: #50a14f;
+    --error: #e45649;
+    --warning: #c18401;
+
+    /* Shadows */
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}

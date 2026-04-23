@@ -1,0 +1,88 @@
+# ==================== Node.js ====================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
+# ==================== Playwright ====================
+playwright-report/
+test-results/
+
+# ==================== Go ====================
+# Build artifacts
+go/server
+go/main
+ go/gonote
+go/*.test
+go/test.log
+
+# Test data (generated)
+go/data-test/
+go/config.test.yaml
+
+# ==================== Data Directories (user data) ====================
+data/
+*.db
+*.sqlite
+*.db-shm
+*.db-wal
+
+# Plugin configuration (user-specific settings)
+shared/plugins/plugin_config.json
+
+# ==================== IDE / Editor ====================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.sublime-project
+*.sublime-workspace
+
+# ==================== OS ====================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# ==================== Logs ====================
+*.log
+logs/
+
+# ==================== Environment ====================
+.env
+.env.local
+.env.*.local
+
+# ==================== Temporary Files ====================
+tmp/
+temp/
+*.tmp
+*.temp
+
+# ==================== Documentation (not for commit) ====================
+OPTIMIZATION.md
+cookies.txt
+
+# ==================== Qwen / AI ====================
+.qwen/
+AGENTS.md
+
+# ==================== Build Outputs ====================
+shared/assets/css/tailwind.css
+
+# ==================== Test Coverage ====================
+coverage/
+*.cover
+
+# ==================== Legacy / Migration ====================
+docs/go-migration
+.sisyphus
+dont-upload/
+go/coverage.out
+10_Run Playwright tests.txt
