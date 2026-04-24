@@ -264,6 +264,6 @@ dlv test ./internal/handlers
 
 ## Related Documentation
 
-- [Contributing Guidelines](../CONTRIBUTING.md)
-- [Security Tests](e2e/security/)
-- [API Documentation](../project-docs/developer-guide/API.md)
+- [Contributing Guidelines](../../CONTRIBUTING.md)
+- [Security Tests](../../tests/e2e/security/)
+- [API Documentation](./API.md)

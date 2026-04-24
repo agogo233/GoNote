@@ -11,7 +11,7 @@ This directory contains deployment configuration files for GoNote.
 ## Deploy to Render.com
 
 1. Fork or connect the repository to Render.com
-2. Use `deploy/render.yaml` as the blueprint
+2. Use `../../deploy/render.yaml` as the blueprint
 3. Configure environment variables as needed
 
-See [project-docs/developer-guide/ENVIRONMENT_VARIABLES.md](../project-docs/developer-guide/ENVIRONMENT_VARIABLES.md) for available variables.
+See [ENVIRONMENT_VARIABLES.md](./ENVIRONMENT_VARIABLES.md) for available variables.

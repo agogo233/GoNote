@@ -137,7 +137,7 @@ When `debug: false` (recommended):
 
 ## 📚 Related Documentation
 
-- **Authentication**: [AUTHENTICATION.md](AUTHENTICATION.md)
+- **Authentication**: [../security/AUTHENTICATION.md](../security/AUTHENTICATION.md)
 - **API Rate Limiting**: [API.md](API.md#rate-limiting)
 
 ---

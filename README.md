@@ -373,12 +373,11 @@ Want to learn more?
 - **[数学公式](project-docs/user-guide/MATHJAX_CN.md)** - LaTeX/MathJax 示例和语法参考
 - **[Mermaid 图表](project-docs/user-guide/MERMAID_CN.md)** - 使用 Mermaid 创建图表
 
-- **[笔记分享](project-docs/user-guide/SHARING_CN.md)** - 使用分享令牌分享笔记
-- **[API 文档](project-docs/developer-guide/API_CN.md)** - REST API 文档和示例
-- **[认证说明](project-docs/security/AUTHENTICATION_CN.md)** - 启用实例的密码保护
-- **[环境变量](project-docs/developer-guide/ENVIRONMENT_VARIABLES_CN.md)** - 通过环境变量配置设置
-- **[安全指南](project-docs/security/SECURITY_CN.md)** - 安全指南和最佳实践
-- **[部署指南](project-docs/legacy/README_CN.md)** - Go 后端部署指南
+ - **[笔记分享](project-docs/user-guide/SHARING_CN.md)** - 使用分享令牌分享笔记
+ - **[API 文档](project-docs/developer-guide/API_CN.md)** - REST API 文档和示例
+ - **[认证说明](project-docs/security/AUTHENTICATION_CN.md)** - 启用实例的密码保护
+ - **[环境变量](project-docs/developer-guide/ENVIRONMENT_VARIABLES_CN.md)** - 通过环境变量配置设置
+ - **[安全指南](project-docs/security/SECURITY_CN.md)** - 安全指南和最佳实践
 
 ## Multiple Languages
 
@@ -388,7 +387,7 @@ GoNote supports multiple languages! Currently available:
 
 **To change language:** Go to Settings (gear icon) -> Language dropdown.
 
-**To add your own language:** See the [Contributing Guidelines](CONTRIBUTING.md#-contributing-translations) for instructions on creating translation files.
+**To add your own language:** See the [Contributing Guidelines](CONTRIBUTING.md#translating-documentation) for instructions on creating translation files.
 
 **Docker users:** Mount your custom locales folder to add or override translations:
 
@@ -416,7 +415,7 @@ GoNote 支持多种语言！当前可用：
 
 **切换语言：** 前往设置（齿轮图标）-> 语言下拉菜单。
 
-**添加您自己的语言：** 请参阅[贡献指南](CONTRIBUTING.md#-contributing-translations)获取创建翻译文件的说明。
+**添加您自己的语言：** 请参阅[贡献指南](CONTRIBUTING.md#translating-documentation)获取创建翻译文件的说明。
 
 **Docker 用户：** 挂载自定义语言文件夹以添加或覆盖翻译：
 

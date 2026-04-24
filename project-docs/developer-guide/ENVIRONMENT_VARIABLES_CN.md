@@ -137,8 +137,8 @@ server:
 
 ## 📚 相关文档
 
-- **认证**：[AUTHENTICATION.md](AUTHENTICATION.md)
-- **API 限流**：[API.md](API.md#限流)
+- **认证**：[../security/AUTHENTICATION_CN.md](../security/AUTHENTICATION_CN.md)
+- **API 限流**：[API_CN.md](API_CN.md#限流)
 
 ---
 
