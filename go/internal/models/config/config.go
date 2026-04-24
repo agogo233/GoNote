@@ -143,6 +143,11 @@ func applyDefaults(cfg *Config) {
 	if cfg.Cache.ScanInterval == 0 {
 		cfg.Cache.ScanInterval = 30 // 30 seconds default
 	}
+
+	// Server defaults
+	if len(cfg.Server.AllowedOrigins) == 0 {
+		cfg.Server.AllowedOrigins = []string{"*"} // Allow all origins by default
+	}
 }
 
 // loadVersion reads the version from VERSION file

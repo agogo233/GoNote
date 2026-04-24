@@ -4,8 +4,8 @@
   "description": "Your Self-Hosted Knowledge Base",
   "private": true,
   "scripts": {
-    "css-build": "tailwindcss -i ./build/tailwind/input.css -o ./shared/frontend/libs/tailwind/tailwind.css --minify",
-    "css-watch": "tailwindcss -i ./build/tailwind/input.css -o ./shared/frontend/libs/tailwind/tailwind.css --watch",
+    "css-build": "tailwindcss -i ./build/tailwind/input.css -o ./shared/frontend/libs/tailwind/3.4.17/tailwind.css --minify",
+    "css-watch": "tailwindcss -i ./build/tailwind/input.css -o ./shared/frontend/libs/tailwind/3.4.17/tailwind.css --watch",
     "test:e2e": "playwright test --config=tests/playwright.config.ts",
     "test:e2e:ui": "playwright test --config=tests/playwright.config.ts --ui"
   },

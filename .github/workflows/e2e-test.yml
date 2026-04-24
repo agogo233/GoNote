@@ -50,6 +50,7 @@ jobs:
         export PORT=9000
         export AUTHENTICATION_ENABLED=true
         export AUTHENTICATION_PASSWORD=test-admin-password
+        export STORAGE_NOTES_DIR=../data
         ./server > server.log 2>&1 &
         SERVER_PID=$!
         echo "Server PID: $SERVER_PID"
