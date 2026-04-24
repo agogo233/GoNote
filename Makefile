@@ -1,4 +1,4 @@
-.PHONY: build run test vet clean clean-data clean-build docker-build docker-up docker-down docker-prod-build docker-prod-up docker-prod-down help
+.PHONY: build run test vet clean clean-data clean-build docker-build docker-up docker-down docker-prod-build docker-prod-up docker-prod-down deps help
 
 # Default target
 help:
@@ -80,3 +80,7 @@ test-e2e:
 	cd tests && npx playwright test
 test-e2e-ui:
 	cd tests && npx playwright test --ui
+
+# Frontend dependencies
+deps:
+	npm install
