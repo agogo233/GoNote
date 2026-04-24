@@ -97,7 +97,7 @@ GoNote 是一个**轻量级、自托管的笔记应用**，让您完全掌控自
 - **Zero Cost** - No subscriptions, no hidden fees
 - **Fast & Lightweight** - Instant search and navigation
 - **Beautiful Themes** - Multiple themes, easy to customize
-- **Extensible** - Plugin system for custom features
+
 - **Responsive** - Works on desktop, tablet, and mobile
 - **Simple Storage** - Plain markdown files in folders
 - **Math Support** - LaTeX/MathJax for beautiful equations
@@ -113,7 +113,7 @@ GoNote 是一个**轻量级、自托管的笔记应用**，让您完全掌控自
 - **零成本**——无订阅费，无隐藏费用
 - **快速轻量**——即时搜索和导航
 - **精美主题**——多种主题，易于定制
-- **可扩展**——插件系统支持自定义功能
+
 - **响应式**——适用于桌面、平板和手机
 - **简单存储**——文件夹中的纯 Markdown 文件
 - **数学支持**——LaTeX/MathJax 渲染精美公式
@@ -144,7 +144,7 @@ docker run -d --name gonote -p 9000:9000 `
 
 Open **http://localhost:9000** - done!
 
-> Your notes are saved in `./data/`. Themes, plugins, locales and default configuration values are included in the image.
+> Your notes are saved in `./data/`. Themes and default configuration values are included in the image.
 
 ### 快速设置
 
@@ -166,7 +166,7 @@ docker run -d --name gonote -p 9000:9000 `
 
 打开 **http://localhost:9000** - 完成！
 
-> 您的笔记保存在 `./data/`。主题、插件、语言文件和默认配置值已包含在镜像中。
+> 您的笔记保存在 `./data/`。主题、语言文件和默认配置值已包含在镜像中。
 
 ### Using Docker Compose
 
@@ -301,7 +301,7 @@ cd ..
 
 ### Advanced Docker Setup
 
-The image includes bundled config, themes, plugins, and locales. To customize, you must:
+The image includes bundled config, themes, and locales. To customize, you must:
 1. **Map the volume** in your docker-compose or docker run command
 2. **Provide content** - the file/folder must exist with valid content (empty = app might break!)
 
@@ -310,12 +310,12 @@ The image includes bundled config, themes, plugins, and locales. To customize, y
 | `data/` | Your notes | No - You must create |
 | `config.yaml` | App settings | Yes |
 | `shared/themes/` | Custom themes | Yes |
-| `shared/plugins/` | Custom plugins | Yes |
+
 | `shared/locales/` | Translations | Yes |
 
 ### 高级 Docker 设置
 
-镜像包含 bundled 配置、主题、插件和语言文件。要自定义，您必须：
+镜像包含 bundled 配置、主题和语言文件。要自定义，您必须：
 1. **映射卷**——在 docker-compose 或 docker run 命令中
 2. **提供内容**——文件/文件夹必须存在且包含有效内容（空 = 应用可能出错！）
 
@@ -324,7 +324,7 @@ The image includes bundled config, themes, plugins, and locales. To customize, y
 | `data/` | 您的笔记 | 否 - 您需创建 |
 | `config.yaml` | 应用设置 | 是 |
 | `shared/themes/` | 自定义主题 | 是 |
-| `shared/plugins/` | 自定义插件 | 是 |
+
 | `shared/locales/` | 翻译文件 | 是 |
 
 ### Dashboard Integration
@@ -357,7 +357,7 @@ Want to learn more?
 - **[TEMPLATES.md](project-docs/user-guide/TEMPLATES.md)** - Create notes from reusable templates with dynamic placeholders
 - **[MATHJAX.md](project-docs/user-guide/MATHJAX.md)** - LaTeX/math notation examples and syntax reference
 - **[MERMAID.md](project-docs/user-guide/MERMAID.md)** - Diagram creation with Mermaid (flowcharts, sequence diagrams, and more)
-- **[PLUGINS.md](project-docs/user-guide/PLUGINS.md)** - Plugin system and available plugins
+
 - **[SHARING.md](project-docs/user-guide/SHARING.md)** - Share notes with tokens
 - **[API.md](project-docs/developer-guide/API.md)** - REST API documentation and examples
 - **[AUTHENTICATION.md](project-docs/security/AUTHENTICATION.md)** - Enable password protection for your instance
@@ -372,7 +372,7 @@ Want to learn more?
 - **[笔记模板](project-docs/user-guide/TEMPLATES_CN.md)** - 使用可重用模板创建笔记
 - **[数学公式](project-docs/user-guide/MATHJAX_CN.md)** - LaTeX/MathJax 示例和语法参考
 - **[Mermaid 图表](project-docs/user-guide/MERMAID_CN.md)** - 使用 Mermaid 创建图表
-- **[插件系统](project-docs/user-guide/PLUGINS_CN.md)** - 插件系统和可用插件
+
 - **[笔记分享](project-docs/user-guide/SHARING_CN.md)** - 使用分享令牌分享笔记
 - **[API 文档](project-docs/developer-guide/API_CN.md)** - REST API 文档和示例
 - **[认证说明](project-docs/security/AUTHENTICATION_CN.md)** - 启用实例的密码保护
@@ -507,7 +507,7 @@ GoNote 专为**自托管、私密使用**而设计。请记住这些安全注意
 - Run on `localhost` or a private network only
 - Use Docker for isolation and easier security management
 - Keep your system and dependencies updated
-- Review and audit any plugins you install
+
 - Set appropriate file permissions on the `data/` directory
 
 **TL;DR**: Perfect for personal use on your local machine or home network. Enable built-in password protection if needed, or use a reverse proxy with authentication if exposing to wider networks.
@@ -535,7 +535,7 @@ GoNote 专为**自托管、私密使用**而设计。请记住这些安全注意
 - 仅在 `localhost` 或私有网络上运行
 - 使用 Docker 实现隔离和更简单的安全管理
 - 保持系统和依赖项更新
-- 审查和审核安装的插件
+
 - 为 `data/` 目录设置适当的文件权限
 
 **总结**：适合在本地机器或家庭网络上个人使用。如需可启用内置密码保护，或暴露到更广泛网络时使用带认证的反向代理。

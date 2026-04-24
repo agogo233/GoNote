@@ -28,8 +28,7 @@ shared/
 ├── locales/          # Internationalization files
 │   ├── en-US.json    # English translations
 │   └── zh-CN.json    # Chinese translations
-├── plugins/          # Plugin directory (user-installed plugins)
-│   └── ...
+
 └── assets/           # Project-owned assets
     ├── css/          # Compiled CSS (Tailwind output)
     ├── icons/        # Project icons (SVG, PNG)
@@ -57,8 +56,6 @@ CSS themes provide alternative color schemes. The app dynamically loads theme fi
 ### Localization (`locales/`)
 JSON files containing translation strings. The app supports English (en-US) and Chinese (zh-CN) out of the box.
 
-### Plugins (`plugins/`)
-Directory for user-installed or custom plugins. Plugins can extend the application's functionality.
 
 ### Assets (`assets/`)
 Project-owned static assets:
@@ -73,7 +70,7 @@ The Go backend serves static files from this directory under the `/static/` path
 /static/frontend/    → shared/frontend/
 /static/themes/      → shared/themes/
 /static/locales/     → shared/locales/
-/static/plugins/     → shared/plugins/
+
 /static/assets/      → shared/assets/
 ```
 
@@ -81,7 +78,7 @@ The Go backend serves static files from this directory under the `/static/` path
 
 - **New theme**: Add CSS file to `themes/` and ensure it's registered in the theme loader
 - **New translation**: Add JSON file to `locales/` with proper locale code
-- **New plugin**: Place in `plugins/` with required manifest
+
 - **Updated library**: Replace versioned directory under `frontend/libs/` (e.g., `highlight.js/11.11.1/`)
 
 ## Related

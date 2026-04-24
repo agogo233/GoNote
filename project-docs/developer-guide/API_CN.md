@@ -46,7 +46,8 @@ Content-Type: application/json
 }
 ```
 
-**注意：** 创建新笔记时，会触发 `on_note_create` 钩子，允许插件修改初始内容。响应中包含可能被修改后的内容。
+**注意：** 新创建笔记的内容直接返回，不会被修改。
+
 
 **Linux/Mac：**
 ```bash
@@ -243,54 +244,7 @@ GET /api/themes/{theme_id}
 curl http://localhost:9000/api/themes/dark
 ```
 
-## 🔌 插件
 
-插件可以钩入应用生命周期的各种事件。
-
-### 可用插件钩子
-
-| 钩子 | 触发时机 | 可修改数据 |
-|------|----------------|-----------------|
-| `on_note_create` | 创建新笔记 | ✅ 是（返回修改后的内容） |
-| `on_note_save` | 保存笔记时 | ✅ 是（返回转换后的内容，或 None） |
-| `on_note_load` | 加载笔记时 | ✅ 是（返回转换后的内容，或 None） |
-| `on_note_delete` | 删除笔记时 | ❌ 否 |
-| `on_search` | 执行搜索时 | ❌ 否 |
-| `on_app_startup` | 应用启动时 | ❌ 否 |
-
-完整插件文档见 [PLUGINS.md](PLUGINS.md)。
-
-### 列出插件
-```http
-GET /api/plugins
-```
-
-### 切换插件
-```http
-POST /api/plugins/{plugin_name}/toggle
-Content-Type: application/json
-
-{
-  "enabled": true
-}
-```
-
-**Linux/Mac：**
-```bash
-curl -X POST http://localhost:9000/api/plugins/note_stats/toggle \
-  -H "Content-Type: application/json" \
-  -d '{"enabled": true}'
-```
-
-**Windows PowerShell：**
-```powershell
-curl.exe -X POST http://localhost:9000/api/plugins/note_stats/toggle -H "Content-Type: application/json" -d "{\"enabled\": true}"
-```
-
-### 计算笔记统计
-```http
-GET /api/plugins/note_stats/calculate?content={markdown_content}
-```
 
 ## 🔗 知识图谱
 

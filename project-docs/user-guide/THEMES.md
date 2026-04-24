@@ -112,12 +112,12 @@ Some features (like Mermaid diagrams, Chart.js) need to know if the background i
 
 #### 4. (Optional) Add a custom emoji icon
 
-Edit `python/backend/themes.py` and add your theme to the `theme_icons` dictionary:
+Edit `go/internal/themes/themes.go` and add your theme to the `ThemeIcons` map:
 
-```python
-theme_icons = {
-    # ... existing themes ...
-    "my-awesome-theme": "🚀"  # Your custom emoji
+```go
+var ThemeIcons = map[string]string{
+    // ... existing themes ...
+    "my-awesome-theme": "🚀", // Your custom emoji
 }
 ```
 
@@ -131,7 +131,7 @@ docker-compose restart
 
 # If running locally:
 # Stop the server (Ctrl+C) and run again:
-python -m gonote.backend.main
+go run go/cmd/server/main.go --config go/config.yaml
 ```
 
 Your new theme will appear in the dropdown as **"🚀 My Awesome Theme"**!

@@ -46,7 +46,7 @@ Content-Type: application/json
 }
 ```
 
-**Note:** When creating a new note, the `on_note_create` hook is triggered, allowing plugins to modify the initial content. The response includes the potentially modified content.
+**Note:** When creating a new note, the content is returned as provided without modification.
 
 **Linux/Mac:**
 ```bash
@@ -243,54 +243,6 @@ GET /api/themes/{theme_id}
 curl http://localhost:9000/api/themes/dark
 ```
 
-## 🔌 Plugins
-
-Plugins can hook into various events in the application lifecycle.
-
-### Available Plugin Hooks
-
-| Hook | Triggered When | Can Modify Data |
-|------|----------------|-----------------|
-| `on_note_create` | New note is created | ✅ Yes (return modified content) |
-| `on_note_save` | Note is being saved | ✅ Yes (return transformed content, or None) |
-| `on_note_load` | Note is loaded | ✅ Yes (return transformed content, or None) |
-| `on_note_delete` | Note is deleted | ❌ No |
-| `on_search` | Search is performed | ❌ No |
-| `on_app_startup` | App starts | ❌ No |
-
-See [PLUGINS.md](PLUGINS.md) for full documentation on creating plugins.
-
-### List Plugins
-```http
-GET /api/plugins
-```
-
-### Toggle Plugin
-```http
-POST /api/plugins/{plugin_name}/toggle
-Content-Type: application/json
-
-{
-  "enabled": true
-}
-```
-
-**Linux/Mac:**
-```bash
-curl -X POST http://localhost:9000/api/plugins/note_stats/toggle \
-  -H "Content-Type: application/json" \
-  -d '{"enabled": true}'
-```
-
-**Windows PowerShell:**
-```powershell
-curl.exe -X POST http://localhost:9000/api/plugins/note_stats/toggle -H "Content-Type: application/json" -d "{\"enabled\": true}"
-```
-
-### Calculate Note Stats
-```http
-GET /api/plugins/note_stats/calculate?content={markdown_content}
-```
 
 ## 🔗 Graph
 

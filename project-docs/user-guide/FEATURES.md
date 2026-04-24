@@ -94,7 +94,7 @@ To link to a heading, convert the heading text to a slug: **lowercase, spaces �
 
 ## 📊 Note Statistics
 
-### Built-in Plugin
+### Features
 - **Word count** - Track document length
 - **Character count** - Including and excluding spaces
 - **Reading time** - Estimated minutes to read
@@ -104,14 +104,6 @@ To link to a heading, convert the heading text to a slug: **lowercase, spaces �
 - **Wikilink count** - Separate count for `[[wikilinks]]`
 - **Expandable panel** - Toggle stats visibility
 
-## 🔌 Plugin System
-
-### Extensibility
-- **Easy installation** - Drop Python files in `plugins/` folder
-- **Hot reload** - Plugins detected on app restart
-- **Toggle on/off** - Enable/disable without deleting
-- **Event hooks** - React to note saves, deletes, searches
-- **API access** - Full access to backend functionality
 
 ## 🏷️ Tags
 

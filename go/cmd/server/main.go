@@ -49,7 +49,7 @@ func main() {
 		applogger.Println("")
 		applogger.Println("⚠️  SECURITY WARNING: You are using the default secret_key with authentication enabled!")
 		applogger.Println("   Please change 'secret_key' in config.yaml or set AUTHENTICATION_SECRET_KEY environment variable.")
-		applogger.Println("   Generate a secure key with: python -c \"import secrets; print(secrets.token_hex(32))\"")
+		applogger.Println("   Generate a secure key with: openssl rand -hex 32")
 		applogger.Println("")
 	}
 

@@ -112,13 +112,12 @@ touch my-awesome-theme.css
 
 #### 4. （可选）添加自定义 Emoji 图标
 
-编辑主题加载逻辑，为您的主题添加自定义 emoji：
+编辑 `go/internal/themes/themes.go` 并添加您的主题到 `ThemeIcons` 映射：
 
-```python
-# 在主题配置中添加
-theme_icons = {
-    # ... 现有主题 ...
-    "my-awesome-theme": "🚀"  # 您的自定义 emoji
+```go
+var ThemeIcons = map[string]string{
+    // ... 现有主题 ...
+    "my-awesome-theme": "🚀", // 您的自定义 emoji
 }
 ```
 
@@ -132,7 +131,7 @@ docker-compose restart
 
 # 如果本地运行：
 # 停止服务器（Ctrl+C）并重新运行：
-go run cmd/server/main.go
+go run go/cmd/server/main.go --config go/config.yaml
 ```
 
 您的新主题将以下拉菜单中的 **"🚀 My Awesome Theme"** 出现！

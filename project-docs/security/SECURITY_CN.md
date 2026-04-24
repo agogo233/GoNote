@@ -45,8 +45,7 @@ authentication:
 # 使用 OpenSSL
 openssl rand -hex 32
 
-# 使用 Python
-python3 -c "import secrets; print(secrets.token_hex(32))"
+
 ```
 
 ### 2. 限流

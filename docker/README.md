@@ -77,7 +77,7 @@ docker-compose -f docker/compose/development.yml up -d --build
 | `/app/data` | Your notes | Yes |
 | `/app/config.yaml` | Configuration | No (bundled) |
 | `/app/themes` | Custom themes | No (bundled) |
-| `/app/plugins` | Custom plugins | No (bundled) |
+
 | `/app/locales` | Translations | No (bundled) |
 
 ## Environment Variables

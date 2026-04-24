@@ -3377,7 +3377,7 @@ function noteApp() {
                     );
                 }
                 
-                // Calculate stats if plugin enabled
+                // Calculate stats if enabled
                 if (this.stats.enabled) {
                     this.calculateStats();
                 }
@@ -4145,7 +4145,7 @@ function noteApp() {
                 this.pushToHistory();
             }
             
-            // Calculate stats in real-time if plugin enabled
+            // Calculate stats in real-time if enabled
             if (this.stats.enabled) {
                 this.calculateStats();
             }

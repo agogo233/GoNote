@@ -19,7 +19,7 @@ Documentation for end users covering features and usage.
 | [TEMPLATES.md](user-guide/TEMPLATES.md) / [中文版](user-guide/TEMPLATES_CN.md) | 使用可重用模板创建笔记 |
 | [MATHJAX.md](user-guide/MATHJAX.md) / [中文版](user-guide/MATHJAX_CN.md) | LaTeX/MathJax 示例和语法参考 |
 | [MERMAID.md](user-guide/MERMAID.md) / [中文版](user-guide/MERMAID_CN.md) | 使用 Mermaid 创建图表 |
-| [PLUGINS.md](user-guide/PLUGINS.md) / [中文版](user-guide/PLUGINS_CN.md) | 插件系统和可用插件 |
+
 | [SHARING.md](user-guide/SHARING.md) / [中文版](user-guide/SHARING_CN.md) | 使用分享令牌分享笔记 |
 
 ### 🔧 开发者指南 / Developer Guide
@@ -97,7 +97,7 @@ project-docs/
 │   ├── TEMPLATES.md / TEMPLATES_CN.md
 │   ├── MATHJAX.md / MATHJAX_CN.md
 │   ├── MERMAID.md / MERMAID_CN.md
-│   ├── PLUGINS.md / PLUGINS_CN.md
+
 │   └── SHARING.md / SHARING_CN.md
 ├── developer-guide/          # 技术文档 / Technical documentation
 │   ├── API.md / API_CN.md

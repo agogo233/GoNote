@@ -45,8 +45,7 @@ authentication:
 # Using OpenSSL
 openssl rand -hex 32
 
-# Using Python
-python3 -c "import secrets; print(secrets.token_hex(32))"
+
 
 # Using Go
 go run -e 'package main; import "crypto/rand"; import "fmt"; import "encoding/hex"; func main() { b := make([]byte, 32); rand.Read(b); fmt.Println(hex.EncodeToString(b)) }'

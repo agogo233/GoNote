@@ -29,8 +29,7 @@ data/
 *.db-shm
 *.db-wal
 
-# Plugin configuration (user-specific settings)
-shared/plugins/plugin_config.json
+
 
 # ==================== IDE / Editor ====================
 .vscode/

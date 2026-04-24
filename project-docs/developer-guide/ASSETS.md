@@ -28,7 +28,7 @@ This directory is for **project-owned assets** that are created and maintained b
 - ❌ Third-party libraries (use `shared/frontend/libs/`)
 - ❌ User-generated content (use `data/`)
 - ❌ Theme files (use `shared/themes/`)
-- ❌ Plugin files (use `shared/plugins/`)
+
 - ❌ Translation files (use `shared/locales/`)
 
 ## CSS Output
@@ -63,6 +63,6 @@ Icons should be provided in multiple formats:
 |-----------|---------|
 | `shared/frontend/libs/` | Third-party library cache |
 | `shared/themes/` | CSS themes for the app |
-| `shared/plugins/` | Plugin files |
+
 | `shared/locales/` | Translation files |
 | `docs/` | Website documentation assets |

@@ -5,13 +5,12 @@ services:
     ports:
       - "9000:9000"
     volumes:
-      # Required: Your notes
-      - ./data:/app/data
-      # Optional: Uncomment to customize (file/folder must exist with content!)
-      # - ./go/config.yaml:/app/config.yaml
-      # - ./shared/themes:/app/themes
-      # - ./shared/plugins:/app/plugins
-      # - ./shared/locales:/app/locales
+# Required: Your notes
+       - ./data:/app/data
+       # Optional: Uncomment to customize (file/folder must exist with content!)
+       # - ./go/config.yaml:/app/config.yaml
+       # - ./shared/themes:/app/themes
+       # - ./shared/locales:/app/locales
     restart: unless-stopped
     environment:
       - TZ=UTC
