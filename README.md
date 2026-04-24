@@ -234,13 +234,15 @@ For development or if you prefer running directly:
 ```bash
 # Clone the repository
 git clone https://github.com/gamosoft/gonote.git
-cd gonote/go
+cd gonote
 
-# Run the application
-go run cmd/server/main.go
+# Run the application from project root
+go run go/cmd/server/main.go --config go/config.yaml
 
 # Access at http://localhost:9000
 ```
+
+> ⚠️ **Important**: Run from the **project root directory**, not from `go/`. The data directory (`./data/`) is relative to the working directory.
 
 **Requirements:**
 - Go 1.24 or higher
@@ -256,8 +258,9 @@ go mod download
 # Build
 go build -o gonote ./cmd/server
 
-# Run
-./gonote
+# Run from project root
+cd ..
+./go/gonote --config go/config.yaml
 ```
 
 ### 本地运行（无需 Docker）
@@ -267,13 +270,15 @@ go build -o gonote ./cmd/server
 ```bash
 # 克隆仓库
 git clone https://github.com/gamosoft/gonote.git
-cd gonote/go
+cd gonote
 
-# 运行应用
-go run cmd/server/main.go
+# 从项目根运行应用
+go run go/cmd/server/main.go --config go/config.yaml
 
 # 访问 http://localhost:9000
 ```
+
+> ⚠️ **重要提示**：必须从**项目根目录**运行，不要进入 `go/` 目录。数据目录 `./data/` 是相对于工作目录的。
 
 **要求：**
 - Go 1.24 或更高版本
@@ -289,8 +294,9 @@ go mod download
 # 构建
 go build -o gonote ./cmd/server
 
-# 运行
-./gonote
+# 从项目根运行
+cd ..
+./go/gonote --config go/config.yaml
 ```
 
 ### Advanced Docker Setup

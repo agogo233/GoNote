@@ -1,4 +1,4 @@
-.PHONY: build run test vet clean docker-build docker-up docker-down deps help
+.PHONY: build run test vet clean clean-data clean-build docker-build docker-up docker-down docker-prod-build docker-prod-up docker-prod-down help
 
 # Default target
 help:
@@ -9,6 +9,11 @@ help:
 	@echo "    make run          - Run Go server (development)"
 	@echo "    make test         - Run Go tests with race detector"
 	@echo "    make vet          - Run go vet"
+	@echo ""
+	@echo "  Data Cleanup:"
+	@echo "    make clean-data       - Clean temporary and cache files"
+	@echo "    make clean-build      - Clean build artifacts"
+	@echo "    make clean            - Full cleanup (data + build)"
 	@echo ""
 	@echo "  Docker:"
 	@echo "    make docker-build      - Build Docker image (Go)"
@@ -30,62 +35,48 @@ help:
 	@echo "  Cleanup:"
 	@echo "    make clean        - Clean build artifacts"
 
-# ==================== Go Development ====================
+# Data cleanup
+data-clean:
+	rm -rf data/temp/*
+	find data/cache -type f -mtime +7 -delete 2>/dev/null || true
+	@echo "Cleaned temporary files and old cache"
 
+clean-build:
+	rm -rf go/server go/main go/gonote go/*.test go/test.log
+	@echo "Cleaned build artifacts"
+
+clean: clean-data clean-build
+	@echo "Full cleanup completed"
+
+# Build
 build:
-	cd go && go build -o server ./cmd/server
+	cd go && go build -o ../gonote ./cmd/server
 
 run:
-	cd go && go run cmd/server/main.go
-
-test:
-	cd go && go test ./... -race
-
-vet:
-	cd go && go vet ./...
-
-# ==================== Docker ====================
+	go run go/cmd/server/main.go --config go/config.yaml
 
 docker-build:
-	docker build -f docker/go/Dockerfile -t gonote:dev .
+	docker build -f docker/go/Dockerfile -t gonote-go .
 
 docker-up:
-	docker-compose -f docker/compose/development.yml up
+	docker-compose -f docker/compose/development.yml up -d
 
 docker-down:
 	docker-compose -f docker/compose/development.yml down
 
 docker-prod-build:
-	docker build -f docker/go/Dockerfile -t gonote:latest .
+	docker-compose -f docker-compose.ghcr.yml build
 
 docker-prod-up:
-	docker-compose -f docker/compose/production.yml up -d
+	docker-compose -f docker-compose.ghcr.yml up -d
 
 docker-prod-down:
-	docker-compose -f docker/compose/production.yml down
+	docker-compose -f docker-compose.ghcr.yml down
 
-# ==================== Frontend ====================
-
-deps:
-	npm install
-
-css-build:
-	npx tailwindcss -i ./build/tailwind/input.css -o ./shared/frontend/libs/tailwind/tailwind.css --minify
-
-css-watch:
-	npx tailwindcss -i ./build/tailwind/input.css -o ./shared/frontend/libs/tailwind/tailwind.css --watch
-
-# ==================== Tests ====================
-
+# Tests
+test:
+	cd go && STORAGE_NOTES_DIR=../data go test ./...
 test-e2e:
-	npx playwright test --config=tests/playwright.config.ts
-
+	cd tests && npx playwright test
 test-e2e-ui:
-	npx playwright test --config=tests/playwright.config.ts --ui
-
-# ==================== Cleanup ====================
-
-clean:
-	rm -rf go/server go/main go/gonote
-	go clean -cache
-	rm -rf node_modules
+	cd tests && npx playwright test --ui
