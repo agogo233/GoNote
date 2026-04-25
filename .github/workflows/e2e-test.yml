@@ -32,9 +32,7 @@ jobs:
       run: cd go && go mod download
 
 - name: Install Playwright
-  run: |
-    npm install
-    npx playwright install --with-deps chromium
+  run: npm install && npx playwright install --with-deps chromium
 
     - name: Build Go server
       run: |
