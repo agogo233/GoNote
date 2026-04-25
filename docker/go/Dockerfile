@@ -25,7 +25,7 @@ COPY go/ .
 RUN CGO_ENABLED=0 GOOS=linux go build \
     -ldflags="-s -w" \
     -trimpath \
-    -o gonote ./go/cmd/server
+    -o gonote ./cmd/server
 
 # ==================== 运行阶段 ====================
 # Runtime stage
