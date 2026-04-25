@@ -31,8 +31,8 @@ jobs:
     - name: Install Go dependencies
       run: cd go && go mod download
 
-- name: Install Playwright
-  run: npm install && npx playwright install --with-deps chromium
+    - name: Install Playwright
+      run: npm install && npx playwright install --with-deps chromium
 
     - name: Build Go server
       run: |
