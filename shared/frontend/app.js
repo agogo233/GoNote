@@ -383,10 +383,10 @@ function noteApp() {
             locale: (function() {
                 const saved = localStorage.getItem('locale');
                 if (saved) return saved;
-                const browserLang = navigator.language || navigator.userLanguage || 'en-US';
+                const browserLang = navigator.language || navigator.userLanguage || 'zh-CN';
                 if (browserLang.startsWith('zh')) return 'zh-CN';
                 if (browserLang.startsWith('en')) return 'en-US';
-                return 'en-US';
+                return 'zh-CN';
             })(),
             available: [],
             translations: window.__preloadedTranslations || {},

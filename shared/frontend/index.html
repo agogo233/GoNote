@@ -40,12 +40,12 @@
                 if (savedLocale) return savedLocale;
                 
                 // Try browser language
-                const browserLang = navigator.language || navigator.userLanguage || 'en-US';
+                const browserLang = navigator.language || navigator.userLanguage || 'zh-CN';
                 // Map common language codes to supported locales
                 if (browserLang.startsWith('zh')) return 'zh-CN';
                 if (browserLang.startsWith('en')) return 'en-US';
-                // Fallback to en-US for unsupported languages
-                return 'en-US';
+                // Fallback to zh-CN for unsupported languages
+                return 'zh-CN';
             }
             const locale = detectLocale();
             
