@@ -83,7 +83,11 @@ docker run -d --name gonote -p 9000:9000 `
 
 打开 **http://localhost:9000** 即可访问。
 
-> 您的笔记保存在 `./data/` 目录。主题、语言文件和默认配置已包含在镜像中。
+> 💡 **数据持久化**：您的笔记保存在宿主机的 `./data/` 目录。重启容器后数据不会丢失。
+> 
+> - 宿主机路径：`./data/notes/`（项目根目录下的 data 目录）
+> - 容器内路径：`/app/data/notes/`
+> - 映射关系：`-v $(pwd)/data:/app/data`
 
 ---
 
@@ -237,6 +241,7 @@ Want to learn more? Check out our comprehensive documentation.
 
 - **[API 文档](project-docs/developer-guide/API_CN.md)** — REST API 文档和示例
 - **[环境变量](project-docs/developer-guide/ENVIRONMENT_VARIABLES_CN.md)** — 通过环境变量配置设置
+- **[Docker 部署](project-docs/developer-guide/DOCKER_DEPLOYMENT_CN.md)** — Docker 部署完整指南（路径映射、故障排查）
 - **[认证说明](project-docs/security/AUTHENTICATION_CN.md)** — 启用实例的密码保护
 - **[安全指南](project-docs/security/SECURITY_CN.md)** — 安全指南和最佳实践
 - **[测试指南](project-docs/developer-guide/TESTING_CN.md)** — 如何运行测试和贡献测试

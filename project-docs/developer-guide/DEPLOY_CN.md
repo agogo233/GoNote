@@ -101,14 +101,14 @@ envVars:
 
 ```bash
 # 从项目根目录运行
-mkdir -p data  # 确保创建数据目录
+mkdir -p data # 确保创建数据目录
 
 docker-compose -f docker/compose/production.yml up -d
 ```
 
 **配置特点**：
 
-- ✅ 使用 GHCR 预构建镜像（` ghcr.io/gamosoft/gonote:latest`）
+- ✅ 使用 GHCR 预构建镜像（`ghcr.io/gamosoft/gonote:latest`）
 - ✅ 启动速度快（无需本地构建）
 - ✅ 自动挂载 `./data` 到容器 `/app/data`
 - ✅ 适合生产环境
@@ -145,6 +145,141 @@ docker-compose -f docker/compose/development.yml up -d
 
 - 首次构建会下载依赖并编译，时间较长（约 2-5 分钟）
 - 修改代码后需重建镜像：`docker-compose build`
+
+---
+
+### 📦 Docker 路径映射说明 / Docker Volume Mapping
+
+**重要**：Docker 容器使用卷挂载来持久化数据。正确理解路径映射对数据管理至关重要。
+
+#### 路径对应关系
+
+```yaml
+# docker-compose.yml 示例
+volumes:
+  - ./data:/app/data
+```
+
+| 容器内路径 | 宿主机路径（项目根目录） | 说明 |
+|-----------|------------------------|------|
+| `/app/data/notes/` | `./data/notes/` | **笔记数据**（核心） |
+| `/app/data/cache/` | `./data/cache/` | 搜索索引和缓存 |
+| `/app/data/temp/` | `./data/temp/` | 临时文件 |
+| `/app/config.yaml` | 需手动挂载 | 配置文件（可选） |
+
+#### 数据持久化验证
+
+**方法 1：在宿主机查看（推荐）**
+```bash
+# 直接查看宿主机上的数据
+ls -la ./data/notes/
+cat ./data/notes/test.md
+```
+
+**方法 2：进入容器查看**
+```bash
+# 1. 找到容器
+docker ps | grep gonote
+
+# 2. 进入容器
+docker exec -it gonote sh
+# 或
+docker exec -it gonote-go sh
+
+# 3. 在容器内查看
+ls -la /app/data/notes/
+cat /app/data/notes/test.md
+exit
+```
+
+**方法 3：使用 docker exec 直接执行**
+```bash
+# 不进入容器，直接执行命令
+docker exec gonote-go ls -la /app/data/notes/
+docker exec gonote-go find /app/data -name "*.md"
+```
+
+#### 常见问题：为什么我的笔记数据不见了？
+
+**问题现象**：启动容器后，发现 `./data/notes/` 目录为空。
+
+**可能原因**：
+
+1. **容器未运行** - 数据是在容器运行时写入的
+   ```bash
+   # 检查容器状态
+   docker ps | grep gonote
+   
+   # 启动容器
+   docker-compose -f docker/compose/development.yml up -d
+   ```
+
+2. **挂载路径不正确** - 确认 `docker-compose.yml` 中的 `volumes` 配置
+   ```yaml
+   volumes:
+     - ./data:/app/data  # 确保 ./data 在项目根目录
+   ```
+
+3. **工作目录错误** - 必须从**项目根目录**启动 Docker Compose
+   ```bash
+   # ❌ 错误：在 docker/compose/ 目录下运行
+   cd docker/compose/
+   docker-compose -f development.yml up -d  # 会创建新的 ./docker/compose/data/
+   
+   # ✅ 正确：在项目根目录运行
+   cd /path/to/gonote
+   docker-compose -f docker/compose/development.yml up -d
+   ```
+
+4. **使用了匿名卷** - 如果之前运行过但未指定挂载，数据在 Docker 管理的卷中
+   ```bash
+   # 查看 Docker 卷
+   docker volume ls | grep gonote
+   
+   # 查看卷的详细信息
+   docker inspect gonote-go | grep -A 20 Mounts
+   ```
+
+#### 创建测试笔记验证挂载
+
+```bash
+# 1. 启动容器
+docker-compose -f docker/compose/development.yml up -d
+
+# 2. 在宿主机创建测试笔记
+cat > ./data/notes/test.md << 'EOF'
+# Test Note
+This is a test note created at $(date)
+EOF
+
+# 3. 在浏览器访问 http://localhost:9000 查看是否显示
+
+# 4. 或在容器内验证
+docker exec gonote-go cat /app/data/notes/test.md
+```
+
+#### 进入容器调试
+
+```bash
+# 进入容器 shell
+docker exec -it gonote-go sh
+
+# 查看当前工作目录
+pwd
+
+# 查看应用目录结构
+ls -la /app/
+
+# 查看数据目录
+ls -la /app/data/
+ls -la /app/data/notes/
+
+# 查看配置文件（如果挂载）
+cat /app/config.yaml
+
+# 退出
+exit
+```
 
 ---
 
@@ -472,6 +607,7 @@ fly launch
 
 ## 📚 相关文档 / Related Documentation
 
+- [DOCKER_DEPLOYMENT_CN.md](DOCKER_DEPLOYMENT_CN.md) - **Docker 部署完整指南（路径映射、故障排查）**
 - [ENVIRONMENT_VARIABLES_CN.md](ENVIRONMENT_VARIABLES_CN.md) - 环境变量完整参考
 - [../docker/README.md](../docker/README.md) - Docker 详细使用说明
 - [../security/SECURITY_CN.md](../security/SECURITY_CN.md) - 安全最佳实践
