@@ -130,6 +130,20 @@ func (si *SearchIndex) indexNoteTo(notePath string, index map[string]*list.List,
 		})
 	}
 
+	// 同时索引文件名（笔记名称）用于标题搜索
+	fileName := extractFileName(notePath)
+	fileNameTerms := tokenize(fileName)
+	for _, term := range fileNameTerms {
+		if _, ok := titleIndex[term]; !ok {
+			titleIndex[term] = list.New()
+		}
+		titleIndex[term].PushBack(TitleEntry{
+			NotePath: notePath,
+			Title:    title,
+			Score:    0,
+		})
+	}
+
 	return nil
 }
 
@@ -192,6 +206,20 @@ func (si *SearchIndex) indexNote(notePath string) error {
 	// Tokenize title for title index
 	titleTerms := tokenize(title)
 	for _, term := range titleTerms {
+		if _, ok := si.titleIndex[term]; !ok {
+			si.titleIndex[term] = list.New()
+		}
+		si.titleIndex[term].PushBack(TitleEntry{
+			NotePath: notePath,
+			Title:    title,
+			Score:    0,
+		})
+	}
+
+	// 同时索引文件名（笔记名称）
+	fileName := extractFileName(notePath)
+	fileNameTerms := tokenize(fileName)
+	for _, term := range fileNameTerms {
 		if _, ok := si.titleIndex[term]; !ok {
 			si.titleIndex[term] = list.New()
 		}
@@ -433,10 +461,25 @@ func (si *SearchIndex) SearchByTitle(query string) ([]models.SearchResult, error
 			continue
 		}
 
-		// Check if title contains all query terms (prefix matching)
-		if si.titleContainsTerms(title, queryTerms) {
+		// Check if title or filename contains all query terms (prefix matching)
+		if si.titleContainsTerms(notePath, title, queryTerms) {
 			matchedNotes[notePath] = true
-			score := si.calculateTitleScore(title, queryLower)
+			// 计算分数：如果标题包含所有查询词，使用标题计分；否则使用文件名计分
+			titleLower := strings.ToLower(title)
+			fileName := extractFileName(notePath)
+			allInTitle := true
+			for _, term := range queryTerms {
+				if !strings.Contains(titleLower, term) {
+					allInTitle = false
+					break
+				}
+			}
+			var score float64
+			if allInTitle {
+				score = si.calculateTitleScore(title, queryLower)
+			} else {
+				score = si.calculateTitleScore(fileName, queryLower)
+			}
 			matches = append(matches, titleScore{
 				notePath: notePath,
 				title:    title,
@@ -486,11 +529,13 @@ func (si *SearchIndex) findTitlesWithPrefix(prefix string) map[string]string {
 	return result
 }
 
-// titleContainsTerms checks if a title contains all query terms as substrings
-func (si *SearchIndex) titleContainsTerms(title string, terms []string) bool {
+// titleContainsTerms checks if a title or filename contains all query terms as substrings
+func (si *SearchIndex) titleContainsTerms(notePath string, title string, terms []string) bool {
 	titleLower := strings.ToLower(title)
+	fileName := extractFileName(notePath)
+	fileNameLower := strings.ToLower(fileName)
 	for _, term := range terms {
-		if !strings.Contains(titleLower, term) {
+		if !strings.Contains(titleLower, term) && !strings.Contains(fileNameLower, term) {
 			return false
 		}
 	}
@@ -574,6 +619,14 @@ func (si *SearchIndex) searchTitleFromDisk(query string) ([]models.SearchResult,
 			result := si.buildTitleResult(note.Path, title, query)
 			result.Score = si.calculateTitleScore(title, queryLower)
 			results = append(results, result)
+		} else {
+			// 同时检查文件名匹配
+			fileName := extractFileName(note.Path)
+			if strings.Contains(fileName, queryLower) {
+				result := si.buildTitleResult(note.Path, title, query)
+				result.Score = si.calculateTitleScore(fileName, queryLower)
+				results = append(results, result)
+			}
 		}
 	}
 
@@ -702,9 +755,24 @@ func (si *SearchIndex) searchByTitleInternal(query string) ([]models.SearchResul
 			continue
 		}
 
-		if si.titleContainsTerms(title, queryTerms) {
+		if si.titleContainsTerms(notePath, title, queryTerms) {
 			matchedNotes[notePath] = true
-			score := si.calculateTitleScore(title, queryLower)
+			// 计算分数：如果标题包含所有查询词，使用标题计分；否则使用文件名计分
+			titleLower := strings.ToLower(title)
+			fileName := extractFileName(notePath)
+			allInTitle := true
+			for _, term := range queryTerms {
+				if !strings.Contains(titleLower, term) {
+					allInTitle = false
+					break
+				}
+			}
+			var score float64
+			if allInTitle {
+				score = si.calculateTitleScore(title, queryLower)
+			} else {
+				score = si.calculateTitleScore(fileName, queryLower)
+			}
 			matches = append(matches, titleScore{
 				notePath: notePath,
 				title:    title,
@@ -1018,6 +1086,15 @@ func extractTitle(content string, notePath string) string {
 	name := filepath.Base(notePath)
 	name = strings.TrimSuffix(name, filepath.Ext(name))
 	// Replace hyphens/underscores with spaces
+	name = strings.ReplaceAll(name, "-", " ")
+	name = strings.ReplaceAll(name, "_", " ")
+	return name
+}
+
+// extractFileName extracts searchable name from file path (without extension, hyphens/underscores as spaces)
+func extractFileName(notePath string) string {
+	name := filepath.Base(notePath)
+	name = strings.TrimSuffix(name, filepath.Ext(name))
 	name = strings.ReplaceAll(name, "-", " ")
 	name = strings.ReplaceAll(name, "_", " ")
 	return name

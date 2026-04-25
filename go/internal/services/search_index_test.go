@@ -617,8 +617,56 @@ func TestSearchIndex_SearchByTitle_CJK(t *testing.T) {
 		t.Fatalf("SearchByTitle failed: %v", err)
 	}
 	if len(results) < 2 {
-		t.Errorf("Expected at least 2 CJK title results for '旅游', got %d", len(results))
+	t.Errorf("Expected at least 2 CJK title results for '旅游', got %d", len(results))
 	}
+}
+
+func TestSearchIndex_SearchByTitle_FilenameMatch(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// 笔记1: 文件名含"旅游"，标题不包含"旅游"
+	note1Path := filepath.Join(tempDir, "旅游攻略.md")
+	content1 := "# 旅行指南\n介绍各地旅游景点。"
+	if err := os.WriteFile(note1Path, []byte(content1), 0644); err != nil {
+		t.Fatalf("Failed to write note: %v", err)
+	}
+
+	// 笔记2: 标题含"旅游"，文件名不包含"旅游"
+	note2Path := filepath.Join(tempDir, "travel-notes.md")
+	content2 := "# 旅游博客\n记录我的旅游经历。"
+	if err := os.WriteFile(note2Path, []byte(content2), 0644); err != nil {
+		t.Fatalf("Failed to write note: %v", err)
+	}
+
+	ns := NewNoteService(tempDir)
+	si := NewSearchIndex(tempDir, ns)
+	if err := si.BuildIndex(); err != nil {
+		t.Fatalf("BuildIndex failed: %v", err)
+	}
+
+	// 搜索"旅游"，应该找到两个笔记
+	results, err := si.SearchByTitle("旅游")
+	if err != nil {
+		t.Fatalf("SearchByTitle failed: %v", err)
+	}
+	if len(results) != 2 {
+		t.Errorf("Expected 2 results for '旅游', got %d", len(results))
+	}
+
+	// 命名应为内容标题：笔记1: "旅行指南"，笔记2: "旅游博客"
+	names := make(map[string]bool)
+	for _, r := range results {
+		names[r.Name] = true
+	}
+	if !names["旅行指南"] {
+		t.Error("Expected result to include note with title '旅行指南' (from filename match)")
+	}
+	if !names["旅游博客"] {
+		t.Error("Expected result to include note with title '旅游博客'")
+	}
+
+	// 分数：文件名匹配的"旅行指南"应有一定分数（<60 或更高），标题匹配的"旅游博客"应较高
+	// 由于"旅游博客"标题包含查询，prefix match可能给予较高分
 }
 
 func TestSearchIndex_SearchSmart_CJK(t *testing.T) {
