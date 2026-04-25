@@ -2,6 +2,45 @@
 
 Base URL: `http://localhost:9000`
 
+All protected endpoints require authentication when `authentication.enabled: true` in config.yaml.
+
+---
+
+## 🔐 Authentication
+
+### Login Page
+```http
+GET /login
+```
+Returns the HTML login page.
+
+### Login
+```http
+POST /login
+Content-Type: application/json
+
+{
+  "password": "your_password"
+}
+```
+Authenticates the user session.
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Login successful"
+}
+```
+
+### Logout
+```http
+POST /logout
+```
+Logs out the current user session.
+
+---
+
 ## 🗂️ Notes
 
 ### List All Notes
@@ -10,9 +49,20 @@ GET /api/notes
 ```
 Returns all notes with their metadata and folder structure.
 
-**Example:**
-```bash
-curl http://localhost:9000/api/notes
+**Response:**
+```json
+{
+  "notes": [
+    {
+      "path": "folder/note.md",
+      "name": "note",
+      "folder": "folder",
+      "title": "Note Title",
+      "created_at": "2025-11-26T10:30:00Z",
+      "updated_at": "2025-11-26T11:00:00Z"
+    }
+  ]
+}
 ```
 
 ### Get Note Content
@@ -24,6 +74,15 @@ Retrieve the content of a specific note.
 **Example:**
 ```bash
 curl http://localhost:9000/api/notes/folder/mynote.md
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "path": "folder/mynote.md",
+  "content": "# My Note\nContent here..."
+}
 ```
 
 ### Create/Update Note
@@ -41,12 +100,10 @@ Content-Type: application/json
 {
   "success": true,
   "path": "test.md",
-  "message": "Note created successfully",
+  "message": "Note created/updated successfully",
   "content": "# My Note\nNote content here..."
 }
 ```
-
-**Note:** When creating a new note, the content is returned as provided without modification.
 
 **Linux/Mac:**
 ```bash
@@ -80,6 +137,16 @@ Content-Type: application/json
   "newPath": "folder/note.md"
 }
 ```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Note moved successfully"
+}
+```
+
+---
 
 ## 🎬 Media
 
@@ -162,12 +229,48 @@ Move a media file to a different location. Supports drag & drop in the UI.
 }
 ```
 
-**Notes:**
-- Media is stored in `_attachments` folders relative to the note's location
-- Filenames are automatically timestamped (e.g., `media-20240417093343.mp3`)
-- Media appears in the sidebar navigation and can be viewed/deleted directly
-- Drag & drop files into the editor automatically uploads and inserts markdown
-- All media access requires authentication when security is enabled
+### List Orphaned Media
+```http
+GET /api/media/orphaned
+```
+
+Lists media files that are not referenced by any notes (dangling attachments).
+
+**Response:**
+```json
+{
+  "success": true,
+  "files": [
+    {
+      "path": "folder/_attachments/old-image.png",
+      "size": 102400,
+      "modified": "2025-11-25T10:30:00Z"
+    }
+  ],
+  "count": 1
+}
+```
+
+### Cleanup Orphaned Media
+```http
+DELETE /api/media/orphaned
+```
+
+Deletes all orphaned media files. Returns summary of deleted files.
+
+**Response:**
+```json
+{
+  "success": true,
+  "deleted_count": 5,
+  "freed_space_bytes": 1048576,
+  "message": "Cleaned up 5 orphaned files"
+}
+```
+
+**Rate Limit:** 30 requests per 60 seconds
+
+---
 
 ## 📁 Folders
 
@@ -181,6 +284,16 @@ Content-Type: application/json
 }
 ```
 
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Folder created successfully"
+}
+```
+
+**Rate Limit:** 30 requests per 60 seconds
+
 ### Delete Folder
 ```http
 DELETE /api/folders/{folder_path}
@@ -191,6 +304,8 @@ Deletes a folder and all its contents.
 ```bash
 curl -X DELETE http://localhost:9000/api/folders/Projects/Archive
 ```
+
+**Rate Limit:** 20 requests per 60 seconds
 
 ### Move Folder
 ```http
@@ -203,6 +318,16 @@ Content-Type: application/json
 }
 ```
 
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Folder moved successfully"
+}
+```
+
+**Rate Limit:** 20 requests per 60 seconds
+
 ### Rename Folder
 ```http
 POST /api/folders/rename
@@ -214,6 +339,18 @@ Content-Type: application/json
 }
 ```
 
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Folder renamed successfully"
+}
+```
+
+**Rate Limit:** 30 requests per 60 seconds
+
+---
+
 ## 🔍 Search
 
 ### Search Notes
@@ -221,81 +358,45 @@ Content-Type: application/json
 GET /api/search?q={query}
 ```
 
-**Example:**
-```bash
-curl "http://localhost:9000/api/search?q=hello"
-```
-
-## 🎨 Themes
-
-### List Themes
-```http
-GET /api/themes
-```
-
-### Get Theme CSS
-```http
-GET /api/themes/{theme_id}
-```
+**Optional query parameters:**
+- `q` - Search query (required)
+- `page` - Page number (default: 1)
+- `per_page` - Results per page (default: 50)
 
 **Example:**
 ```bash
-curl http://localhost:9000/api/themes/dark
+curl "http://localhost:9000/api/search?q=hello&page=1&per_page=20"
 ```
-
-
-## 🔗 Graph
-
-### Get Note Graph
-```http
-GET /api/graph
-```
-Returns the relationship graph between notes with link detection.
 
 **Response:**
 ```json
 {
-  "nodes": [
-    { "id": "folder/note.md", "label": "note" },
-    { "id": "another.md", "label": "another" }
+  "query": "hello",
+  "results": [
+    {
+      "path": "folder/note.md",
+      "title": "Hello World",
+      "snippet": "...<mark>hello</mark> world...",
+      "score": 1.234
+    }
   ],
-  "edges": [
-    { "source": "folder/note.md", "target": "another.md", "type": "wikilink" }
-  ]
+  "total": 10,
+  "page": 1,
+  "per_page": 20,
+  "pages": 1
 }
 ```
 
-**Link Detection:**
-- **Wikilinks** - `[[note]]` or `[[note|display text]]` syntax (Obsidian-style)
-- **Markdown links** - `[text](note.md)` standard internal links
-- **Edge types** - `"wikilink"` or `"markdown"` to distinguish link source
-
-## ⚙️ System
-
-### Get Config
-```http
-GET /api/config
-```
-Returns application configuration.
-
-### Health Check
-```http
-GET /health
-```
-Returns system health status.
-
-### Swagger UI (Interactive Docs)
-```http
-GET /api
-```
-Interactive API documentation with try-it-out functionality (Swagger UI).
+**Rate Limit:** 60 requests per 60 seconds
 
 ---
 
 ## 🏷️ Tags
 
 ### List All Tags
-`GET /api/tags`
+```http
+GET /api/tags
+```
 
 Returns all tags found in notes with their usage counts.
 
@@ -311,7 +412,9 @@ Returns all tags found in notes with their usage counts.
 ```
 
 ### Get Notes by Tag
-`GET /api/tags/{tag_name}`
+```http
+GET /api/tags/{tag_name}
+```
 
 Returns all notes that have a specific tag.
 
@@ -335,9 +438,13 @@ Returns all notes that have a specific tag.
 ## 📄 Templates
 
 ### List Templates
-`GET /api/templates`
+```http
+GET /api/templates
+```
 
 Returns all available note templates from the `_templates` folder.
+
+**Rate Limit:** 120 requests per 60 seconds
 
 **Response:**
 ```json
@@ -358,7 +465,9 @@ Returns all available note templates from the `_templates` folder.
 ```
 
 ### Get Template Content
-`GET /api/templates/{template_name}`
+```http
+GET /api/templates/{template_name}
+```
 
 Returns the content of a specific template.
 
@@ -369,24 +478,26 @@ Returns the content of a specific template.
 ```json
 {
   "name": "meeting-notes",
-  "content": "# Meeting Notes\n\nDate: {{date}}\n..."
+  "content": "# Meeting Notes\n\nDate: {{date}}\nAttendees: {{attendees}}\n..."
 }
 ```
 
+**Rate Limit:** 120 requests per 60 seconds
+
 ### Create Note from Template
-`POST /api/templates/create-note`
+```http
+POST /api/templates/create-note
+Content-Type: application/json
 
-Creates a new note from a template with placeholder replacement.
-
-**Request Body:**
-```json
 {
   "templateName": "meeting-notes",
   "notePath": "meetings/weekly-sync.md"
 }
 ```
 
-**Placeholders:**
+Creates a new note from a template with placeholder replacement.
+
+**Supported placeholders:**
 - `{{date}}` - Current date (YYYY-MM-DD)
 - `{{time}}` - Current time (HH:MM:SS)
 - `{{datetime}}` - Current datetime
@@ -403,9 +514,11 @@ Creates a new note from a template with placeholder replacement.
   "success": true,
   "path": "meetings/weekly-sync.md",
   "message": "Note created from template successfully",
-  "content": "# Meeting Notes\n\nDate: 2025-11-26\n..."
+  "content": "# Meeting Notes\n\nDate: 2025-11-26\nAttendees: \n..."
 }
 ```
+
+**Rate Limit:** 60 requests per 60 seconds
 
 ---
 
@@ -434,6 +547,8 @@ Creates a share token for the note. The `theme` is optional (defaults to "light"
 }
 ```
 
+**Rate Limit:** 30 requests per 60 seconds
+
 ### Get Share Status
 ```http
 GET /api/share/{note_path}
@@ -451,16 +566,29 @@ Check if a note is currently shared.
 }
 ```
 
+**Rate Limit:** 120 requests per 60 seconds
+
 ### Revoke Share
 ```http
 DELETE /api/share/{note_path}
 ```
 Removes public access to the note.
 
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Share revoked"
+}
+```
+
+**Rate Limit:** 30 requests per 60 seconds
+
 ### List Shared Notes
 ```http
 GET /api/shared-notes
 ```
+
 Returns paths of all currently shared notes.
 
 **Response:**
@@ -470,11 +598,235 @@ Returns paths of all currently shared notes.
 }
 ```
 
+**Rate Limit:** 60 requests per 60 seconds
+
 ### View Shared Note (Public)
 ```http
 GET /share/{token}
 ```
-Public endpoint - no authentication required. Returns the note as a standalone HTML page with the theme set when sharing was created.
+
+Public endpoint - no authentication required. Returns the note as a standalone HTML page with the theme set when sharing was created. Optionally generate QR code for mobile access.
+
+**Example:**
+```bash
+curl http://localhost:9000/share/LRFEo86oSVeJ3Gju
+```
+
+---
+
+## 🔗 Backlinks
+
+Find all notes that link to a specific note using wikilink syntax `[[link]]` and markdown links.
+
+### Get Backlinks
+```http
+GET /api/backlinks/{note_path}
+```
+
+Returns source notes and where they link to the target note.
+
+**Response:**
+```json
+{
+  "success": true,
+  "backlinks": [
+    {
+      "source_path": "other-note.md",
+      "link_texts": ["note-name", "folder/note"],
+      "links": [
+        {
+          "line": 10,
+          "context": "See also [[note-name]]",
+          "type": "wikilink"
+        },
+        {
+          "line": 15,
+          "context": "Check [this](folder/note) out",
+          "type": "markdown"
+        }
+      ]
+    }
+  ],
+  "count": 1
+}
+```
+
+**Rate Limit:** 60 requests per 60 seconds
+
+---
+
+## 📊 Statistics
+
+Get comprehensive statistics for a note including word count, reading time, and structure analysis.
+
+### Get Note Statistics
+```http
+GET /api/stats/{note_path}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "words": 150,
+    "sentences": 12,
+    "characters": 800,
+    "total_characters": 1000,
+    "reading_time_minutes": 1,
+    "lines": 50,
+    "paragraphs": 10,
+    "list_items": 5,
+    "tables": 1,
+    "links": 8,
+    "internal_links": 6,
+    "external_links": 2,
+    "wikilinks": 3,
+    "code_blocks": 2,
+    "inline_code": 5,
+    "headings": {
+      "h1": 1,
+      "h2": 3,
+      "h3": 2
+    },
+    "tasks": {
+      "total": 4,
+      "completed": 2,
+      "pending": 2
+    },
+    "images": 1,
+    "blockquotes": 2
+  }
+}
+```
+
+**Rate Limit:** 60 requests per 60 seconds
+
+---
+
+## 🎨 Themes
+
+### List Themes
+```http
+GET /api/themes
+```
+
+Returns all available themes from the `themes` directory.
+
+### Get Theme CSS
+```http
+GET /api/themes/{theme_id}
+```
+
+Returns the CSS content for the specified theme.
+
+**Example:**
+```bash
+curl http://localhost:9000/api/themes/dark
+```
+
+---
+
+## 🌍 Locales
+
+### List Available Languages
+```http
+GET /api/locales
+```
+
+Returns all available locale (translation) files.
+
+### Get Locale File
+```http
+GET /api/locales/{language_code}
+```
+
+Returns locale content for the specified language (e.g., `en-US`, `zh-CN`).
+
+---
+
+## 📡 WebSocket
+
+### Real-time Updates
+```http
+GET /ws
+```
+
+WebSocket endpoint for receiving real-time notifications. When authentication is enabled, requires valid session.
+
+**Events:**
+- `notes_updated` - Broadcast when background note scan completes (new/updated/deleted notes detected)
+
+**Example message:**
+```json
+{
+  "event": "notes_updated",
+  "timestamp": "2025-11-26T11:00:00Z"
+}
+```
+
+---
+
+## ⚙️ System
+
+### Get Config
+```http
+GET /api/config
+```
+
+Returns application configuration (may filter sensitive fields like secret_key).
+
+**Response:**
+```json
+{
+  "app": {
+    "name": "GoNote",
+    "version": "0.25.0"
+  },
+  "server": {
+    "host": "0.0.0.0",
+    "port": 9000,
+    "debug": false
+  },
+  "authentication": {
+    "enabled": false
+  },
+  "search": {
+    "enabled": true
+  }
+}
+```
+
+**Rate Limit:** 120 requests per 60 seconds
+
+### Health Check
+```http
+GET /health
+```
+
+Returns system health status.
+
+**Response:**
+```json
+{
+  "status": "healthy",
+  "timestamp": "2025-11-26T11:00:00Z",
+  "version": "0.25.0"
+}
+```
+
+---
+
+## 🔒 Security Headers
+
+GoNote includes the following security middleware:
+
+- **CSRF Protection**: Double Submit Cookie pattern applied to state-changing operations
+- **Rate Limiting**: Per-endpoint rate limits to prevent abuse
+- **CORS**: Configurable allowed origins
+- **Secure Cookies**: Automatically enabled when HTTPS detected
+
+**CSRF Token**: The CSRF token is set in a cookie named `csrf_`. For state-changing requests, include the token in the `X-CSRF-Token` header. The token is readable by JavaScript (HTTPOnly=false) to facilitate this.
 
 ---
 
@@ -482,7 +834,7 @@ Public endpoint - no authentication required. Returns the note as a standalone H
 
 All endpoints return JSON responses:
 
-**Success:**
+**Success (generic):**
 ```json
 {
   "success": true,
@@ -490,13 +842,75 @@ All endpoints return JSON responses:
 }
 ```
 
+**Success (specific):**
+Some endpoints use custom response structures tailored to their data (see individual endpoint docs).
+
 **Error:**
 ```json
 {
   "detail": "Error message"
 }
 ```
+
 ---
 
-💡 **Tip:** Visit `/api` for interactive Swagger UI documentation where you can try endpoints directly in your browser!
+## 🔢 Rate Limiting
 
+### Global Rate Limiter
+A global rate limiter is applied to all requests. The default configuration (when `RATE_LIMIT_ENABLED=true`) is:
+- 30 requests per 1 second window
+
+Configure via:
+```yaml
+rate_limit:
+  enabled: true
+  max_requests: 30
+  window_seconds: 1
+```
+
+Or environment variables:
+```
+RATE_LIMIT_ENABLED=true
+RATE_LIMIT_MAX=30
+RATE_LIMIT_WINDOW=1
+```
+
+### Per-Endpoint Rate Limiting
+
+Some endpoints have custom limits:
+
+| Endpoint | Limit | Window |
+|----------|-------|--------|
+| `POST /login` | 10 | 60s |
+| `POST /api/notes/move` | 30 | 60s |
+| `DELETE /api/notes/*` | 30 | 60s |
+| `POST /api/folders` | 30 | 60s |
+| `POST /api/folders/rename` | 30 | 60s |
+| `POST /api/share/*` | 30 | 60s |
+| `DELETE /api/share/*` | 30 | 60s |
+| `POST /api/media/move` | 30 | 60s |
+| `POST /api/upload-media` | 20 | 60s |
+| `POST /api/templates/create-note` | 60 | 60s |
+| `GET /api/backlinks/*` | 60 | 60s |
+| `GET /api/stats/*` | 60 | 60s |
+| `GET /api/shared-notes` | 60 | 60s |
+| `GET /api/templates` | 120 | 60s |
+| `GET /api/templates/*` | 120 | 60s |
+| `GET /api/share/*` | 120 | 60s |
+| `GET /api/config` | 120 | 60s |
+
+When rate limit is exceeded, server returns `429 Too Many Requests`.
+
+---
+
+## 💡 Usage Tips
+
+- Use `/api/config` to discover current runtime configuration (except secrets)
+- All responses are case-sensitive; use `snake_case` for field names
+- For drag & drop media uploads, the `note_path` parameter indicates which note the media is attached to
+- All paths are URL-encoded and case-sensitive
+- When authentication is enabled, include session cookies in requests (browser handles this automatically; for API calls, ensure you're logged in)
+
+---
+
+**Tip:** For password-protected deployments, log in first via `POST /login` to obtain session cookies, then all `/api/*` endpoints will be accessible.
