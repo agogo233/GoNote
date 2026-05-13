@@ -7,26 +7,25 @@
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
     <meta name="theme-color" content="#667eea">
     
-    <!-- Preload translations (same approach as index.html) -->
+    <!-- Preload translations (async fetch, same approach as index.html) -->
     <script>
-        (function() {
+        (async function() {
             const locale = localStorage.getItem('locale') || 'en-US';
-            const xhr = new XMLHttpRequest();
-            xhr.open('GET', '/api/locales/' + locale, false);
+            const fallbackLocale = locale !== 'en-US' ? 'en-US' : null;
+            window.__translations = {};
+            
             try {
-                xhr.send();
-                if (xhr.status === 200) {
-                    window.__translations = JSON.parse(xhr.responseText);
-                } else if (locale !== 'en-US') {
-                    xhr.open('GET', '/api/locales/en-US', false);
-                    xhr.send();
-                    if (xhr.status === 200) {
-                        window.__translations = JSON.parse(xhr.responseText);
+                const response = await fetch('/api/locales/' + locale);
+                if (response.ok) {
+                    window.__translations = await response.json();
+                } else if (fallbackLocale) {
+                    const fallbackResponse = await fetch('/api/locales/' + fallbackLocale);
+                    if (fallbackResponse.ok) {
+                        window.__translations = await fallbackResponse.json();
                     }
                 }
             } catch (e) {
                 console.error('Failed to preload translations:', e);
-                window.__translations = {};
             }
             
             // Simple translation function

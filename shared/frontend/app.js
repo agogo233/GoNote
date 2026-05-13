@@ -214,9 +214,12 @@ const ErrorHandler = {
         
         // Show user-friendly alert if requested
         if (showAlert) {
-            // Note: ErrorHandler doesn't have access to Alpine's t() function
-            // This message remains in English as a fallback
-            alert(`Failed to ${operation}. Please try again.`);
+            // Use custom modal if available, fallback to native alert
+            if (window.showAppAlert) {
+                window.showAppAlert(`Failed to ${operation}. Please try again.`);
+            } else {
+                alert(`Failed to ${operation}. Please try again.`);
+            }
         }
     }
 };
@@ -484,6 +487,24 @@ function noteApp() {
                 cleanupInProgress: false,
                 cleanupSuccess: false,
             },
+            // 确认对话框（替换原生 confirm）
+            confirm: {
+                show: false,
+                message: '',
+                resolve: null,
+            },
+            // 提示对话框（替换原生 alert）
+            alert: {
+                show: false,
+                message: '',
+            },
+            // 输入对话框（替换原生 prompt）
+            prompt: {
+                show: false,
+                message: '',
+                value: '',
+                resolve: null,
+            },
         },
         
         // 拖拽状态
@@ -680,6 +701,8 @@ function noteApp() {
             
             // Store global reference for native event handlers in x-html content
             window.$root = this;
+            // Expose modal helpers for ErrorHandler and x-html event handlers
+            window.showAppAlert = this.showAlert.bind(this);
             
             // ESC key to cancel drag operations
             document.addEventListener('keydown', (e) => {
@@ -961,11 +984,11 @@ function noteApp() {
                     window.location.href = '/login';
                 } else {
                     const error = await response.json().catch(() => ({}));
-                    alert(error.detail || this.t('settings.logout_failed') || 'Logout failed');
+                    this.showAlert(error.detail || this.t('settings.logout_failed') || 'Logout failed');
                 }
             } catch (error) {
                 console.error('Logout failed:', error);
-                alert(this.t('settings.logout_failed') || 'Logout failed');
+                this.showAlert(this.t('settings.logout_failed') || 'Logout failed');
             }
         },
         
@@ -1573,7 +1596,7 @@ function noteApp() {
                 // Validate the note name
                 const validation = FilenameValidator.validateFilename(this.modals.template.newNoteName);
                 if (!validation.valid) {
-                    alert(this.getValidationErrorMessage(validation, 'note'));
+                    this.showAlert(this.getValidationErrorMessage(validation, 'note'));
                     return;
                 }
                 
@@ -1599,7 +1622,7 @@ function noteApp() {
                 // CRITICAL: Check if note already exists
                 const existingNote = this.notes.find(note => note.path === notePath);
                 if (existingNote) {
-                    alert(this.t('notes.already_exists', { name: validation.sanitized }));
+                    this.showAlert(this.t('notes.already_exists', { name: validation.sanitized }));
                     return;
                 }
                 
@@ -1615,7 +1638,7 @@ function noteApp() {
                 
                 if (!response.ok) {
                     const error = await response.json();
-                    alert(error.detail || this.t('templates.create_failed'));
+                    this.showAlert(error.detail || this.t('templates.create_failed'));
                     return;
                 }
                 
@@ -2627,7 +2650,7 @@ function noteApp() {
         // Handle media files dropped into editor
         async handleMediaDrop(event) {
             if (!this.note.current) {
-                alert(this.t('notes.open_first'));
+                this.showAlert(this.t('notes.open_first'));
                 return;
             }
             
@@ -2647,7 +2670,7 @@ function noteApp() {
             const mediaFiles = files.filter(file => allowedTypes.includes(file.type.toLowerCase()));
             
             if (mediaFiles.length === 0) {
-                alert(this.t('media.no_valid_files'));
+                this.showAlert(this.t('media.no_valid_files'));
                 return;
             }
             
@@ -2942,7 +2965,7 @@ function noteApp() {
         // Delete a media file (image, audio, video, PDF)
         async deleteMedia(mediaPath) {
             const filename = mediaPath.split('/').pop();
-            if (!confirm(this.t('media.confirm_delete', { name: filename }))) return;
+            if (!await this.showConfirm(this.t('media.confirm_delete', { name: filename }))) return;
             
             try {
                 const response = await secureFetch(`/api/notes/${encodeURIComponent(mediaPath)}`, {
@@ -2965,7 +2988,7 @@ function noteApp() {
         },
         
         // Handle clicks on internal links and checkboxes in preview
-        handleInternalLink(event) {
+        async handleInternalLink(event) {
             // Check if clicked element is an interactive checkbox
             const checkbox = event.target.closest('input[data-interactive-checkbox]');
             if (checkbox) {
@@ -3038,7 +3061,7 @@ function noteApp() {
                         setTimeout(() => this.scrollToAnchor(anchor), 100);
                     }
                 });
-            } else if (confirm(this.t('notes.create_from_link', { path: notePath }))) {
+            } else if (await this.showConfirm(this.t('notes.create_from_link', { path: notePath }))) {
                 // Note doesn't exist - create it (reuses createNote with duplicate check)
                 this.createNote(null, notePath);
             }
@@ -3193,7 +3216,7 @@ function noteApp() {
                 // Prevent dropping folder into itself or its subfolders
                 if (targetFolderPath === decodedDraggedPath || 
                     targetFolderPath.startsWith(decodedDraggedPath + '/')) {
-                    alert(this.t('folders.cannot_move_into_self'));
+                    this.showAlert(this.t('folders.cannot_move_into_self'));
                     return;
                 }
                 
@@ -3237,11 +3260,10 @@ function noteApp() {
                         }
                     } else {
                         const errorData = await response.json().catch(() => ({}));
-                        alert(errorData.detail || this.t('move.failed_folder'));
+                        this.showAlert(errorData.detail || this.t('move.failed_folder'));
+
                     }
-                } catch (error) {
-                    console.error('Failed to move folder:', error);
-                    alert(this.t('move.failed_folder'));
+                    this.showAlert(this.t('move.failed_folder'));
                 }
                 return;
             }
@@ -3293,12 +3315,10 @@ function noteApp() {
                 } else {
                     const errorData = await response.json().catch(() => ({}));
                     const errorKey = isMedia ? 'move.failed_media' : 'move.failed_note';
-                    alert(errorData.detail || this.t(errorKey));
+                    this.showAlert(errorData.detail || this.t(errorKey));
+                    return;
                 }
-            } catch (error) {
-                console.error(`Failed to move ${isMedia ? 'media' : 'note'}:`, error);
-                const errorKey = isMedia ? 'move.failed_media' : 'move.failed_note';
-                alert(this.t(errorKey));
+                this.showAlert(this.t(errorKey));
             }
         },
         
@@ -3909,7 +3929,7 @@ function noteApp() {
                     ? this.t('notes.prompt_name_in_folder', { folder: targetFolder })
                     : this.t('notes.prompt_name_with_path');
                 
-                const noteName = prompt(promptText);
+                const noteName = await this.showPrompt(promptText);
                 if (!noteName) return;
                 
                 // Validate the name/path (may contain / for paths when no target folder)
@@ -3918,7 +3938,7 @@ function noteApp() {
                     : FilenameValidator.validatePath(noteName);
                 
                 if (!validation.valid) {
-                    alert(this.getValidationErrorMessage(validation, 'note'));
+                    this.showAlert(this.getValidationErrorMessage(validation, 'note'));
                     return;
                 }
                 
@@ -3934,7 +3954,7 @@ function noteApp() {
             // CRITICAL: Check if note already exists (applies to both prompt and direct path)
             const existingNote = this.notes.find(note => note.path === notePath);
             if (existingNote) {
-                alert(this.t('notes.already_exists', { name: notePath }));
+                this.showAlert(this.t('notes.already_exists', { name: notePath }));
                 return;
             }
             
@@ -3978,7 +3998,7 @@ function noteApp() {
                 ? this.t('folders.prompt_name_in_folder', { folder: targetFolder })
                 : this.t('folders.prompt_name_with_path');
             
-            const folderName = prompt(promptText);
+            const folderName = await this.showPrompt(promptText);
             if (!folderName) return;
             
             // Validate the name/path (may contain / for paths when no target folder)
@@ -3987,7 +4007,7 @@ function noteApp() {
                 : FilenameValidator.validatePath(folderName);
             
             if (!validation.valid) {
-                alert(this.getValidationErrorMessage(validation, 'folder'));
+                this.showAlert(this.getValidationErrorMessage(validation, 'folder'));
                 return;
             }
             
@@ -3997,7 +4017,7 @@ function noteApp() {
             // Check if folder already exists
             const existingFolder = this.folders.all.find(folder => folder === folderPath);
             if (existingFolder) {
-                alert(this.t('folders.already_exists', { name: validatedName }));
+                this.showAlert(this.t('folders.already_exists', { name: validatedName }));
                 return;
             }
             
@@ -4027,13 +4047,13 @@ function noteApp() {
         
         // Rename a folder
         async renameFolder(folderPath, currentName) {
-            const newName = prompt(this.t('folders.prompt_rename', { name: currentName }), currentName);
+            const newName = await this.showPrompt(this.t('folders.prompt_rename', { name: currentName }), currentName);
             if (!newName || newName === currentName) return;
             
             // Validate the new name (single segment, no path separators)
             const validation = FilenameValidator.validateFilename(newName);
             if (!validation.valid) {
-                alert(this.getValidationErrorMessage(validation, 'folder'));
+                this.showAlert(this.getValidationErrorMessage(validation, 'folder'));
                 return;
             }
             
@@ -4093,9 +4113,7 @@ function noteApp() {
         
         // Delete folder
         async deleteFolder(folderPath, folderName) {
-            const confirmation = confirm(this.t('folders.confirm_delete', { name: folderName }));
-            
-            if (!confirmation) return;
+            if (!await this.showConfirm(this.t('folders.confirm_delete', { name: folderName }))) return;
             
             try {
                 const response = await secureFetch(`/api/folders/${encodeURIComponent(folderPath)}`, {
@@ -4784,14 +4802,14 @@ function noteApp() {
             const newName = this.note.name.trim();
             
             if (!newName) {
-                alert(this.t('notes.empty_name'));
+                this.showAlert(this.t('notes.empty_name'));
                 return;
             }
             
             // Validate the new name (single segment, no path separators)
             const validation = FilenameValidator.validateFilename(newName);
             if (!validation.valid) {
-                alert(this.getValidationErrorMessage(validation, 'note'));
+                this.showAlert(this.getValidationErrorMessage(validation, 'note'));
                 // Reset the name in the UI
                 this.note.name = this.decodeNoteName(oldPath.split('/').pop().replace('.md', ''));
                 return;
@@ -4806,7 +4824,7 @@ function noteApp() {
             // Check if a note with the new name already exists
             const existingNote = this.notes.find(n => n.path.toLowerCase() === newPath.toLowerCase());
             if (existingNote) {
-                alert(this.t('notes.already_exists', { name: validatedName }));
+                this.showAlert(this.t('notes.already_exists', { name: validatedName }));
                 // Reset the name in the UI
                 this.note.name = this.decodeNoteName(oldPath.split('/').pop().replace('.md', ''));
                 return;
@@ -4854,7 +4872,7 @@ function noteApp() {
         
         // Delete any note from sidebar
         async deleteNote(notePath, noteName) {
-            if (!confirm(this.t('notes.confirm_delete', { name: noteName }))) return;
+            if (!await this.showConfirm(this.t('notes.confirm_delete', { name: noteName }))) return;
             
             try {
                 const encodedPath = notePath.split('/').map(segment => encodeURIComponent(segment)).join('/');
@@ -6305,7 +6323,7 @@ function noteApp() {
         // Export current note as HTML
         async exportToHTML() {
             if (!this.note.current || !this.note.content) {
-                alert(this.t('notes.no_content'));
+                this.showAlert(this.t('notes.no_content'));
                 return;
             }
             
@@ -6602,7 +6620,7 @@ function noteApp() {
                 
             } catch (error) {
                 console.error('HTML export failed:', error);
-                alert(this.t('export.failed', { error: error.message }));
+                this.showAlert(this.t('export.failed', { error: error.message }));
             }
         },
         
@@ -6632,6 +6650,29 @@ function noteApp() {
             setTimeout(() => {
                 this.ui.linkCopied = false;
             }, 1500);
+        },
+        
+        // ============================================================================
+        // Modal Helpers (replacements for native alert/confirm/prompt)
+        // ============================================================================
+        
+        // Show a confirm dialog. Returns true if user confirmed, false otherwise.
+        showConfirm(message) {
+            return new Promise((resolve) => {
+                this.modals.confirm = { show: true, message, resolve };
+            });
+        },
+        
+        // Show an alert dialog (fire-and-forget, no return value)
+        showAlert(message) {
+            this.modals.alert = { show: true, message };
+        },
+        
+        // Show a prompt dialog. Returns the entered value, or null if cancelled.
+        showPrompt(message, defaultValue = '') {
+            return new Promise((resolve) => {
+                this.modals.prompt = { show: true, message, value: defaultValue, resolve };
+            });
         },
         
         // ============================================================================
@@ -6814,11 +6855,10 @@ function noteApp() {
                     NoteCache.sharedNotePaths.add(this.note.current);
                 } else {
                     const error = await response.json();
-                    alert(this.t('share.error_creating', { error: error.detail || 'Unknown error' }));
+                    this.showAlert(this.t('share.error_creating', { error: error.detail || 'Unknown error' }));
+
                 }
-            } catch (error) {
-                console.error('Failed to create share link:', error);
-                alert(this.t('share.error_creating', { error: error.message }));
+                this.showAlert(this.t('share.error_creating', { error: error.message }));
             } finally {
                 this.modals.share.loading = false;
             }
@@ -6850,7 +6890,7 @@ function noteApp() {
         async revokeShareLink() {
             if (!this.note.current) return;
             
-            if (!confirm(this.t('share.confirm_revoke'))) return;
+            if (!await this.showConfirm(this.t('share.confirm_revoke'))) return;
             
             this.modals.share.loading = true;
             
@@ -6867,11 +6907,10 @@ function noteApp() {
                     NoteCache.sharedNotePaths.delete(this.note.current);
                 } else {
                     const error = await response.json();
-                    alert(this.t('share.error_revoking', { error: error.detail || 'Unknown error' }));
+                    this.showAlert(this.t('share.error_revoking', { error: error.detail || 'Unknown error' }));
+
                 }
-            } catch (error) {
-                console.error('Failed to revoke share link:', error);
-                alert(this.t('share.error_revoking', { error: error.message }));
+                this.showAlert(this.t('share.error_revoking', { error: error.message }));
             } finally {
                 this.modals.share.loading = false;
             }
@@ -6935,7 +6974,7 @@ function noteApp() {
         async deleteAllOrphanedMedia() {
             if (this.modals.orphanedMedia.files.length === 0) return;
             
-            const confirmed = confirm(
+            const confirmed = await this.showConfirm(
                 this.t('media.cleanup_confirm', { count: this.modals.orphanedMedia.files.length }) ||
                 `Are you sure you want to delete ${this.modals.orphanedMedia.files.length} orphaned file(s)? This action cannot be undone.`
             );
@@ -6967,7 +7006,7 @@ function noteApp() {
                 // Show success message
                 const message = this.t('media.cleanup_success', { count: data.deletedCount }) ||
                     `Successfully deleted ${data.deletedCount} orphaned file(s).`;
-                alert(message);
+                this.showAlert(message);
             } catch (error) {
                 ErrorHandler.handle('cleanup orphaned media', error);
                 this.modals.orphanedMedia.error = error.message;
