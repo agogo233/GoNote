@@ -3261,8 +3261,9 @@ function noteApp() {
                     } else {
                         const errorData = await response.json().catch(() => ({}));
                         this.showAlert(errorData.detail || this.t('move.failed_folder'));
-
                     }
+                } catch (error) {
+                    console.error('Failed to move folder:', error);
                     this.showAlert(this.t('move.failed_folder'));
                 }
                 return;
@@ -3318,6 +3319,9 @@ function noteApp() {
                     this.showAlert(errorData.detail || this.t(errorKey));
                     return;
                 }
+            } catch (error) {
+                console.error(`Failed to move ${isMedia ? 'media' : 'note'}:`, error);
+                const errorKey = isMedia ? 'move.failed_media' : 'move.failed_note';
                 this.showAlert(this.t(errorKey));
             }
         },
