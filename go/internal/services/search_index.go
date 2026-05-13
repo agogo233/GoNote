@@ -717,6 +717,9 @@ func (si *SearchIndex) searchTitleByPrefix(prefix string) ([]models.SearchResult
 
 				title := entry.Title
 				score := si.calculateTitleScore(title, prefixLower)
+				if score == 0 {
+					score = si.calculateTitleScore(extractFileName(entry.NotePath), prefixLower)
+				}
 				matches = append(matches, titleScore{
 					notePath: entry.NotePath,
 					title:    title,
@@ -878,6 +881,9 @@ func (si *SearchIndex) searchTitleByPrefixInternal(prefix string) ([]models.Sear
 				seen[entry.NotePath] = true
 
 				score := si.calculateTitleScore(entry.Title, prefixLower)
+				if score == 0 {
+					score = si.calculateTitleScore(extractFileName(entry.NotePath), prefixLower)
+				}
 				matches = append(matches, titleScore{
 					notePath: entry.NotePath,
 					title:    entry.Title,
