@@ -190,7 +190,7 @@ func setupRoutes(app *fiber.App, cfg *config.Config) *services.NoteService {
 		handlers.BroadcastNotesUpdated()
 	})
 	
-	searchService := services.NewSearchService(cfg.Storage.NotesDir)
+	searchService := services.NewSearchService(cfg.Storage.NotesDir, noteService)
 	searchIndex := services.NewSearchIndex(cfg.Storage.NotesDir, noteService)
 	tagService := services.NewTagService(noteService, cfg.Storage.NotesDir)
 	templateService := services.NewTemplateService(cfg.Storage.NotesDir)
@@ -201,7 +201,7 @@ func setupRoutes(app *fiber.App, cfg *config.Config) *services.NoteService {
 
 	themeService := services.NewThemeService(themePath)
 	localeService := services.NewLocaleService(localePath)
-	graphService := services.NewGraphService(cfg.Storage.NotesDir)
+	graphService := services.NewGraphService(cfg.Storage.NotesDir, noteService)
 	exportService := services.NewExportService(cfg.Storage.NotesDir, themePath)
 
 	// Build search index asynchronously on startup

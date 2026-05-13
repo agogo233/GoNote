@@ -11,17 +11,26 @@ import (
 
 // GraphService handles knowledge graph operations
 type GraphService struct {
-	notesDir string
+	notesDir    string
+	noteService *NoteService // shared NoteService for cache reuse; nil = create new each time
 }
 
-// NewGraphService creates a new GraphService
-func NewGraphService(notesDir string) *GraphService {
-	return &GraphService{notesDir: notesDir}
+// NewGraphService creates a new GraphService.
+// Pass a shared *NoteService to leverage caching; omit or pass nil to create a new one per request.
+func NewGraphService(notesDir string, noteService ...*NoteService) *GraphService {
+	s := &GraphService{notesDir: notesDir}
+	if len(noteService) > 0 {
+		s.noteService = noteService[0]
+	}
+	return s
 }
 
 // GetGraph returns the knowledge graph data
 func (s *GraphService) GetGraph() (*models.GraphData, error) {
-	ns := NewNoteService(s.notesDir)
+	ns := s.noteService
+	if ns == nil {
+		ns = NewNoteService(s.notesDir)
+	}
 	notes, _, err := ns.ScanNotes(false)
 	if err != nil {
 		return nil, err
@@ -120,7 +129,10 @@ func (s *GraphService) resolveLink(target string) string {
 	}
 
 	// It's a note name, search for it
-	ns := NewNoteService(s.notesDir)
+	ns := s.noteService
+	if ns == nil {
+		ns = NewNoteService(s.notesDir)
+	}
 	notes, _, _ := ns.ScanNotes(false)
 
 	// Exact match

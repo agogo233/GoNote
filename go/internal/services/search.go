@@ -12,19 +12,28 @@ import (
 
 // SearchService handles search operations
 type SearchService struct {
-	notesDir string
+	notesDir    string
+	noteService *NoteService // shared NoteService for cache reuse; nil = create new each time
 }
 
-// NewSearchService creates a new SearchService
-func NewSearchService(notesDir string) *SearchService {
-	return &SearchService{notesDir: notesDir}
+// NewSearchService creates a new SearchService.
+// Pass a shared *NoteService to leverage caching; omit or pass nil to create a new one per search.
+func NewSearchService(notesDir string, noteService ...*NoteService) *SearchService {
+	s := &SearchService{notesDir: notesDir}
+	if len(noteService) > 0 {
+		s.noteService = noteService[0]
+	}
+	return s
 }
 
 // Search performs full-text search through note contents
 func (s *SearchService) Search(query string) ([]models.SearchResult, error) {
 	results := []models.SearchResult{}
 
-	ns := NewNoteService(s.notesDir)
+	ns := s.noteService
+	if ns == nil {
+		ns = NewNoteService(s.notesDir)
+	}
 	notes, _, err := ns.ScanNotes(false)
 	if err != nil {
 		return nil, err

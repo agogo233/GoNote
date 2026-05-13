@@ -274,10 +274,18 @@ func (s *NoteService) SaveNote(notePath, content string) error {
 		return err
 	}
 
-	// Fine-grained cache invalidation: only invalidate related entries
+	// Write first, then invalidate cache.
+	// This prevents a read race: before this fix, invalidation happened before write,
+	// so a reader arriving in between would see a cache miss, fall back to scanning,
+	// and potentially read a partially-written file.
+	if err := os.WriteFile(fullPath, []byte(content), 0644); err != nil {
+		return err
+	}
+
+	// Fine-grained cache invalidation after successful write
 	s.invalidateNoteCache(notePath)
 
-	return os.WriteFile(fullPath, []byte(content), 0644)
+	return nil
 }
 
 // DeleteNote deletes a note
@@ -701,8 +709,10 @@ func (s *NoteService) IsReady() bool {
 	}
 }
 
-// ClearCache clears the note cache
+// ClearCache clears the note cache.
+// Uses Clear() instead of replacing the pointer to avoid leaking the old cache's cleanup goroutine.
 func (s *NoteService) ClearCache() {
-	s.cache = NewCache(DefaultCapacity, DefaultTTL)
+	s.cache.Clear()
+	s.tagCache.Clear()
 }
 

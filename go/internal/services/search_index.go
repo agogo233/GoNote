@@ -14,7 +14,9 @@ import (
 
 // Pre-compiled regex patterns for performance
 var (
-	cjkRegex = regexp.MustCompile(`[\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}]`)
+	cjkRegex    = regexp.MustCompile(`[\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}]`)
+	asciiWordRE = regexp.MustCompile(`[a-z0-9]+`)
+	cjkWordRE   = regexp.MustCompile(`[\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}]+`)
 )
 
 // SearchIndex provides fast full-text search using inverted index
@@ -148,6 +150,7 @@ func (si *SearchIndex) indexNoteTo(notePath string, index map[string]*list.List,
 }
 
 // indexNote indexes a single note into the main index (must hold lock)
+// This version removes old entries first, then re-indexes.
 func (si *SearchIndex) indexNote(notePath string) error {
 	fullPath := filepath.Join(si.notesDir, notePath)
 	content, err := readFileContent(fullPath)
@@ -233,14 +236,67 @@ func (si *SearchIndex) indexNote(notePath string) error {
 	return nil
 }
 
+// indexNoteFresh indexes a single note WITHOUT removing old entries first.
+// Use this when the caller has already removed old entries (e.g. UpdateIndex).
+// Must hold the write lock when calling.
+func (si *SearchIndex) indexNoteFresh(notePath string) error {
+	fullPath := filepath.Join(si.notesDir, notePath)
+	content, err := readFileContent(fullPath)
+	if err != nil {
+		return err
+	}
+
+	title := extractTitle(content, notePath)
+	si.titleMap[notePath] = title
+
+	terms := tokenize(content)
+	for pos, term := range terms {
+		if _, ok := si.index[term]; !ok {
+			si.index[term] = list.New()
+		}
+		si.index[term].PushBack(IndexEntry{
+			NotePath: notePath,
+			Position: pos,
+		})
+	}
+
+	titleTerms := tokenize(title)
+	for _, term := range titleTerms {
+		if _, ok := si.titleIndex[term]; !ok {
+			si.titleIndex[term] = list.New()
+		}
+		si.titleIndex[term].PushBack(TitleEntry{
+			NotePath: notePath,
+			Title:    title,
+			Score:    0,
+		})
+	}
+
+	fileName := extractFileName(notePath)
+	fileNameTerms := tokenize(fileName)
+	for _, term := range fileNameTerms {
+		if _, ok := si.titleIndex[term]; !ok {
+			si.titleIndex[term] = list.New()
+		}
+		si.titleIndex[term].PushBack(TitleEntry{
+			NotePath: notePath,
+			Title:    title,
+			Score:    0,
+		})
+	}
+
+	return nil
+}
+
 // UpdateIndex updates the index for a single note (incremental)
+// Calls removeNoteFromIndex first, then indexNoteFresh (which skips the redundant removal).
 func (si *SearchIndex) UpdateIndex(notePath string) error {
 	si.mu.Lock()
 	defer si.mu.Unlock()
 
 	si.removeNoteFromIndex(notePath)
 
-	return si.indexNote(notePath)
+	return si.indexNoteFresh(notePath)
 }
 
 // RemoveFromIndex removes a note from the index
@@ -1109,7 +1165,6 @@ func tokenize(text string) []string {
 	termMap := make(map[string]bool)
 	var terms []string
 
-	asciiWordRE := regexp.MustCompile(`[a-z0-9]+`)
 	asciiWords := asciiWordRE.FindAllString(text, -1)
 	for _, word := range asciiWords {
 		if len(word) >= 2 {
@@ -1120,7 +1175,6 @@ func tokenize(text string) []string {
 		}
 	}
 
-	cjkWordRE := regexp.MustCompile(`[\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}]+`)
 	cjkWords := cjkWordRE.FindAllString(text, -1)
 	for _, word := range cjkWords {
 		runes := []rune(word)

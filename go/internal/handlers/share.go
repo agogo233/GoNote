@@ -37,6 +37,12 @@ func (h *ShareHandler) Create(c *fiber.Ctx) error {
 	if err == nil {
 		notePath = decodedPath
 	}
+
+	// Security check - prevent directory traversal
+	if !services.ValidatePathSecurity(h.config.Storage.NotesDir, notePath) {
+		return c.Status(400).JSON(fiber.Map{"success": false, "detail": "Invalid note path"})
+	}
+
 	theme := c.Query("theme", "light")
 
 	token, err := h.shareService.CreateShareToken(notePath, theme)
@@ -69,6 +75,11 @@ func (h *ShareHandler) GetStatus(c *fiber.Ctx) error {
 		notePath = decodedPath
 	}
 
+	// Security check - prevent directory traversal
+	if !services.ValidatePathSecurity(h.config.Storage.NotesDir, notePath) {
+		return c.Status(400).JSON(fiber.Map{"success": false, "detail": "Invalid note path"})
+	}
+
 	info, err := h.shareService.GetShareInfo(notePath)
 	if err != nil {
 		return fiber.NewError(500, err.Error())
@@ -93,6 +104,11 @@ func (h *ShareHandler) Revoke(c *fiber.Ctx) error {
 	// Decode URL-encoded path (for Chinese and other special characters)
 	if decodedPath, err := url.PathUnescape(notePath); err == nil {
 		notePath = decodedPath
+	}
+
+	// Security check - prevent directory traversal
+	if !services.ValidatePathSecurity(h.config.Storage.NotesDir, notePath) {
+		return c.Status(400).JSON(fiber.Map{"success": false, "detail": "Invalid note path"})
 	}
 
 	if err := h.shareService.RevokeShareToken(notePath); err != nil {
