@@ -10,6 +10,9 @@ import (
 	"gonote/internal/models"
 )
 
+// ContextWindowSize is the number of characters shown before and after a match in search results
+const ContextWindowSize = 50
+
 // SearchService handles search operations
 type SearchService struct {
 	notesDir    string
@@ -70,12 +73,12 @@ func (s *SearchService) Search(query string) ([]models.SearchResult, error) {
 			endIndex := match[1]
 			matchedText := content[startIndex:endIndex]
 
-			// Create slice window: ±15 characters around match
-			contextStart := startIndex - 15
+			// Create slice window: ±ContextWindowSize characters around match
+			contextStart := startIndex - ContextWindowSize
 			if contextStart < 0 {
 				contextStart = 0
 			}
-			contextEnd := endIndex + 15
+			contextEnd := endIndex + ContextWindowSize
 			if contextEnd > len(content) {
 				contextEnd = len(content)
 			}

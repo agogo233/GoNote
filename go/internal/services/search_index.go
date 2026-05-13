@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"gonote/internal/models"
+	"gonote/internal/models/logger"
 )
 
 // Pre-compiled regex patterns for performance
@@ -78,7 +79,7 @@ func (si *SearchIndex) BuildIndex() error {
 	// Index each note into the new index
 	for _, note := range notes {
 		if err := si.indexNoteTo(note.Path, newIndex, newTitleIndex, newTitleMap); err != nil {
-			// Log error but continue indexing other notes
+			logger.Printf("Error indexing note %s: %v", note.Path, err)
 			continue
 		}
 	}
@@ -395,8 +396,8 @@ func (si *SearchIndex) Search(query string) ([]models.SearchResult, error) {
 	return results, nil
 }
 
-// searchFromDisk searches for non-CJK queries by scanning all notes from disk
-// Used as fallback when index search returns no results
+// searchFromDisk performs a full disk scan fallback using regex pattern matching.
+// Used when the index has no results or cannot process the query.
 func (si *SearchIndex) searchFromDisk(query string) ([]models.SearchResult, error) {
 	// Use NoteService to scan all notes
 	notes, _, err := si.noteService.ScanNotes(false)
@@ -544,8 +545,8 @@ func (si *SearchIndex) SearchByTitle(query string) ([]models.SearchResult, error
 		}
 	}
 
-	// Sort by score descending
-	sort.Slice(matches, func(i, j int) bool {
+	// Sort by score descending (stable sort for deterministic order)
+	sort.SliceStable(matches, func(i, j int) bool {
 		return matches[i].score > matches[j].score
 	})
 
@@ -686,8 +687,8 @@ func (si *SearchIndex) searchTitleFromDisk(query string) ([]models.SearchResult,
 		}
 	}
 
-	// Sort by score descending
-	sort.Slice(results, func(i, j int) bool {
+	// Sort by score descending (stable sort for deterministic order)
+	sort.SliceStable(results, func(i, j int) bool {
 		return results[i].Score > results[j].Score
 	})
 
@@ -729,8 +730,8 @@ func (si *SearchIndex) searchTitleByPrefix(prefix string) ([]models.SearchResult
 		}
 	}
 
-	// Sort by score
-	sort.Slice(matches, func(i, j int) bool {
+	// Sort by score (stable sort for deterministic order)
+	sort.SliceStable(matches, func(i, j int) bool {
 		return matches[i].score > matches[j].score
 	})
 
@@ -758,20 +759,19 @@ func (si *SearchIndex) SearchSmart(query string) ([]models.SearchResult, error) 
 		return []models.SearchResult{}, nil
 	}
 
-	// Step 1: Search titles (high priority)
+	// Step 1: Search titles (high priority, cheap - uses titleIndex)
 	titleResults, _ := si.searchByTitleInternal(query)
 
-	// Step 2: Search full content (fallback)
+	// Step 2: Search full content (more expensive)
 	contentResults, _ := si.searchInternal(query)
 
 	// Step 3: Merge results, title matches first with boosted score
 	seen := make(map[string]bool)
 	var results []models.SearchResult
 
-	// Add title matches first (already scored)
+	// Add title matches first (already scored), boosted by 50
 	for _, r := range titleResults {
 		seen[r.Path] = true
-		// Boost title matches by adding 50 to their score
 		r.Score += 50.0
 		results = append(results, r)
 	}
@@ -840,7 +840,7 @@ func (si *SearchIndex) searchByTitleInternal(query string) ([]models.SearchResul
 		}
 	}
 
-	sort.Slice(matches, func(i, j int) bool {
+	sort.SliceStable(matches, func(i, j int) bool {
 		return matches[i].score > matches[j].score
 	})
 
@@ -893,7 +893,7 @@ func (si *SearchIndex) searchTitleByPrefixInternal(prefix string) ([]models.Sear
 		}
 	}
 
-	sort.Slice(matches, func(i, j int) bool {
+	sort.SliceStable(matches, func(i, j int) bool {
 		return matches[i].score > matches[j].score
 	})
 
@@ -991,27 +991,46 @@ func (si *SearchIndex) buildTitleResult(notePath string, title string, query str
 	}
 }
 
-// contentContainsAllKeywords verifies that note content contains all query keywords as substrings
+// contentContainsAllKeywords verifies that note content contains all query keywords
+// Uses prefix matching to stay consistent with the inverted index lookup strategy
 func (si *SearchIndex) contentContainsAllKeywords(content string, terms []string) bool {
 	contentLower := strings.ToLower(content)
 	for _, term := range terms {
-		if !strings.Contains(contentLower, term) {
+		// Tokenize content and check prefix match (consistent with noteContainsTermsWithPrefix)
+		contentTerms := tokenize(contentLower)
+		found := false
+		for _, ct := range contentTerms {
+			if strings.HasPrefix(ct, term) {
+				found = true
+				break
+			}
+		}
+		// Fallback: direct substring check for non-tokenizable content
+		if !found && strings.Contains(contentLower, term) {
+			found = true
+		}
+		if !found {
 			return false
 		}
 	}
 	return true
 }
 
-// buildSearchResult builds a search result with context
+// buildSearchResult builds a search result with context and per-term highlighting
 func (si *SearchIndex) buildSearchResult(notePath string, content string, query string) models.SearchResult {
-	// Escape query for regex
+	// Tokenize query for per-term highlighting
+	terms := tokenize(query)
+
+	// Use the original query as pattern for finding match positions
+	// (Go's regexp does not support lookahead assertions, so we match the raw query)
 	escapedQuery := regexp.QuoteMeta(query)
 	pattern := regexp.MustCompile("(?i)" + escapedQuery)
 
-	matches := pattern.FindAllStringIndex(content, -1)
+	// Find all matching positions
+	allMatches := pattern.FindAllStringIndex(content, -1)
 
 	var matchedLines []models.MatchContext
-	for i, match := range matches {
+	for i, match := range allMatches {
 		if i >= 3 { // Limit to 3 matches per file
 			break
 		}
@@ -1019,12 +1038,12 @@ func (si *SearchIndex) buildSearchResult(notePath string, content string, query 
 		startIndex := match[0]
 		endIndex := match[1]
 
-		// Create context window: ±50 characters
-		contextStart := startIndex - 50
+		// Create context window: ±ContextWindowSize characters
+		contextStart := startIndex - ContextWindowSize
 		if contextStart < 0 {
 			contextStart = 0
 		}
-		contextEnd := endIndex + 50
+		contextEnd := endIndex + ContextWindowSize
 		if contextEnd > len(content) {
 			contextEnd = len(content)
 		}
@@ -1032,6 +1051,9 @@ func (si *SearchIndex) buildSearchResult(notePath string, content string, query 
 		// Extract context
 		context := content[contextStart:contextEnd]
 		context = strings.ReplaceAll(context, "\n", " ")
+
+		// Apply per-term highlighting within the context snippet
+		context = highlightTerms(context, terms)
 
 		// Calculate line number
 		lineNumber := strings.Count(content[:startIndex], "\n") + 1
@@ -1059,6 +1081,19 @@ func (si *SearchIndex) buildSearchResult(notePath string, content string, query 
 		Type:    fileType,
 		Matches: matchedLines,
 	}
+}
+
+// highlightTerms wraps all occurrences of each term in the text with <mark> tags
+func highlightTerms(text string, terms []string) string {
+	if len(terms) == 0 {
+		return text
+	}
+	result := text
+	for _, term := range terms {
+		re := regexp.MustCompile("(?i)" + regexp.QuoteMeta(term))
+		result = re.ReplaceAllString(result, "<mark class=\"search-highlight\">$0</mark>")
+	}
+	return result
 }
 
 // getFileType determines the file type based on extension
@@ -1102,46 +1137,51 @@ func (si *SearchIndex) GetIndexSize() int {
 
 // extractTitle extracts the title from note content or derives it from the filename
 func extractTitle(content string, notePath string) string {
-	// Try to extract title from frontmatter
-	lines := strings.SplitN(content, "\n", 30) // Check first 30 lines for frontmatter
-	inFrontmatter := false
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "---" {
-			if !inFrontmatter {
-				inFrontmatter = true
-				continue
+	// Try to extract title from frontmatter (scan full content, not just first 30 lines)
+	content = strings.TrimLeft(content, "\n\r\t ")
+	if !strings.HasPrefix(content, "---") {
+		// No frontmatter, fall through to heading/first-line logic
+	} else {
+		endIdx := strings.Index(content[3:], "---")
+		if endIdx >= 0 {
+			frontmatter := content[3 : 3+endIdx]
+			for _, line := range strings.Split(frontmatter, "\n") {
+				trimmed := strings.TrimSpace(line)
+				if strings.HasPrefix(trimmed, "title:") {
+					title := strings.TrimSpace(trimmed[6:])
+					title = strings.Trim(title, "\"'")
+					if title != "" {
+						return title
+					}
+				}
 			}
-			break
 		}
-		if inFrontmatter && strings.HasPrefix(trimmed, "title:") {
-			title := strings.TrimPrefix(trimmed, "title:")
-			title = strings.TrimSpace(title)
-			// Remove quotes if present
-			title = strings.Trim(title, "\"'")
-			if title != "" {
-				return title
-			}
+		// After frontmatter, skip to content for fallback title extraction
+		contentStart := 3 + endIdx + 3
+		if contentStart < len(content) {
+			content = content[contentStart:]
 		}
 	}
 
-	// Fallback: use first non-empty, non-frontmatter line
-	for _, line := range lines {
+	// Fallback: use first h1 heading or first meaningful line
+	for _, line := range strings.Split(content, "\n") {
 		trimmed := strings.TrimSpace(line)
-		if trimmed == "" || trimmed == "---" || strings.HasPrefix(trimmed, "#") && strings.HasPrefix(trimmed, "##") {
+		if trimmed == "" || trimmed == "---" {
+			continue
+		}
+		// Skip h2+ headings
+		if strings.HasPrefix(trimmed, "##") {
 			continue
 		}
 		// If it's a level-1 heading, use it as title
 		if strings.HasPrefix(trimmed, "# ") {
 			return strings.TrimPrefix(trimmed, "# ")
 		}
-		if trimmed != "---" {
-			// Return first meaningful line (truncated)
-			if len(trimmed) > 100 {
-				return trimmed[:100]
-			}
-			return trimmed
+		// Return first meaningful line (truncated)
+		if len(trimmed) > 100 {
+			return trimmed[:100]
 		}
+		return trimmed
 	}
 
 	// Last fallback: derive from filename
