@@ -173,7 +173,7 @@ func setupRoutes(app *fiber.App, cfg *config.Config) *services.NoteService {
 	// Fiber's app.Static() doesn't properly follow symlinks, so we resolve
 	// the actual target path before passing it to app.Static()
 	// Support both development environment (../shared/frontend) and Docker (./frontend)
-	frontendPath := resolveStaticPath("frontend", "../shared/frontend", "./frontend")
+	frontendPath := resolveStaticPath("frontend", "./shared/frontend", "../shared/frontend", "./frontend")
 
 	// Initialize WebSocket manager
 	handlers.InitWSManager()
