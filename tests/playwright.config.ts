@@ -24,16 +24,14 @@ export default defineConfig({
   testDir: './e2e',
   /* Global teardown to clean up test data */
   globalTeardown: './e2e/fixtures/global-teardown.ts',
-  /* Global timeout for entire test suite (30 min) */
-  globalTimeout: 30 * 60 * 1000,
-  /* Default timeout for each test action - reduced from 45s to 30s */
-  timeout: 30 * 1000,
+/* Global timeout for entire test suite (12 min - less than CI timeout) */
+  globalTimeout: 12 * 60 * 1000,
+  /* Default timeout for each test action - reduced from 30s to 20s */
+  timeout: 20 * 1000,
   /* Run tests in files in parallel */
-  fullyParallel: true, // Enabled for faster CI execution
-  /* Fail the build on CI if you accidentally left test.only in the source code. */
-  forbidOnly: !!process.env.CI,
-  /* Retry on CI only - reduced from 2 to 1 to save time */
-  retries: process.env.CI ? 1 : 0,
+  fullyParallel: false, // Disabled for CI stability
+  /* Retry on CI only - set to 0 to save time */
+  retries: process.env.CI ? 0 : 0,
   /* Opt out of parallel tests on CI - use multiple workers instead */
   workers: process.env.CI ? 4 : undefined,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */

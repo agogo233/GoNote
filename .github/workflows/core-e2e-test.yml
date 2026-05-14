@@ -1,0 +1,69 @@
+name: Core E2E Tests
+
+on:
+  pull_request:
+    paths:
+      - 'go/**'
+      - 'shared/**'
+      - 'tests/e2e/auth/**'
+      - 'tests/e2e/notes/**'
+      - 'tests/e2e/search/**'
+      - 'tests/e2e/folders/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Build server
+        run: make build
+
+      - name: Start server
+        run: |
+          ./gonote --config go/config.yaml &
+          echo "SERVER_PID=$!" >> $GITHUB_ENV
+
+      - name: Wait for server
+        run: |
+          timeout 60 bash -c 'until curl -s http://localhost:9000 > /dev/null; do sleep 1; done'
+
+      - name: Run Core Tests
+        env:
+          AUTHENTICATION_ENABLED: true
+          AUTHENTICATION_PASSWORD: test-admin-password
+        run: |
+          npx playwright test --workers=1 auth/ notes/crud.spec.ts search/search.spec.ts
+
+      - name: Stop server
+        run: |
+          if [ -n "$SERVER_PID" ]; then
+            kill $SERVER_PID 2>/dev/null || true
+          fi
+
+      - name: Upload Results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: core-test-results
+          path: test-results/
+          retention-days: 3

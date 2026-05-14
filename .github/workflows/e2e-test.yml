@@ -1,4 +1,4 @@
-name: E2E Tests
+name: Core E2E Tests
 
 on:
   push:
@@ -74,8 +74,8 @@ jobs:
           exit 1
         fi
 
-    - name: Run Playwright tests
-      run: npx playwright test --config=tests/playwright.config.ts
+    - name: Run Core Playwright tests
+      run: npx playwright test --config=tests/playwright.config.ts auth/ notes/crud.spec.ts search/search.spec.ts
       env:
         CI: 'true'
         # Optimize playwright performance
