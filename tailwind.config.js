@@ -1,7 +1,7 @@
 module.exports = {
   content: [
-    '../../shared/frontend/**/*.html',
-    '../../shared/frontend/**/*.js',
+    './shared/frontend/**/*.html',
+    './shared/frontend/**/*.js',
   ],
   theme: {
     extend: {},

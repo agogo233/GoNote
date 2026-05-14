@@ -699,51 +699,52 @@ function noteApp() {
             if (window.__noteapp_initialized) return;
             window.__noteapp_initialized = true;
             
-            // Store global reference for native event handlers in x-html content
-            window.$root = this;
-            // Expose modal helpers for ErrorHandler and x-html event handlers
-            window.showAppAlert = this.showAlert.bind(this);
-            
-            // ESC key to cancel drag operations
-            document.addEventListener('keydown', (e) => {
-                if (e.key === 'Escape' && this.drag.item) {
-                    this.cancelDrag();
+            try {
+                // Store global reference for native event handlers in x-html content
+                window.$root = this;
+                // Expose modal helpers for ErrorHandler and x-html event handlers
+                window.showAppAlert = this.showAlert.bind(this);
+                
+                // ESC key to cancel drag operations
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape' && this.drag.item) {
+                        this.cancelDrag();
+                    }
+                });
+                
+                await this.loadConfig();
+                await this.loadThemes();
+                await this.initTheme();
+                await this.loadAvailableLocales();
+                // Note: Translations are preloaded synchronously before Alpine init (see index.html)
+                // loadLocale() is only called when user changes language from settings
+                await this.loadNotes();
+                await this.loadSharedNotePaths();
+                await this.loadTemplates();
+                this.loadLocalSettings();
+                
+                // Check for pending saves (failed saves from previous session)
+                this.checkAndRestorePendingSave();
+                
+                // Parse URL and load specific note if provided
+                this.loadItemFromURL();
+                
+                // Set initial homepage state ONLY if we're actually on the homepage
+                if (window.location.pathname === '/') {
+                    window.history.replaceState({ homepageFolder: '' }, '', '/');
+                    document.title = this.app.name;
                 }
-            });
-            
-            await this.loadConfig();
-            await this.loadThemes();
-            await this.initTheme();
-            await this.loadAvailableLocales();
-            // Note: Translations are preloaded synchronously before Alpine init (see index.html)
-            // loadLocale() is only called when user changes language from settings
-            await this.loadNotes();
-            await this.loadSharedNotePaths();
-            await this.loadTemplates();
-            this.loadLocalSettings();
-            
-            // Check for pending saves (failed saves from previous session)
-            this.checkAndRestorePendingSave();
-            
-            // Parse URL and load specific note if provided
-            this.loadItemFromURL();
-            
-            // Set initial homepage state ONLY if we're actually on the homepage
-            if (window.location.pathname === '/') {
-                window.history.replaceState({ homepageFolder: '' }, '', '/');
-                document.title = this.app.name;
-            }
-            
-            // Listen for browser back/forward navigation
-            window.addEventListener('popstate', (e) => {
-                if (e.state && e.state.notePath) {
-                    // Navigating to a note
-                    const searchQuery = e.state.searchQuery || '';
-                    this.loadNote(e.state.notePath, false, searchQuery); // false = don't update history
-                    
-                    // Update search box and trigger search if needed
-                    if (searchQuery) {
-                        this.search.query = searchQuery;
+                
+                // Listen for browser back/forward navigation
+                window.addEventListener('popstate', (e) => {
+                    if (e.state && e.state.notePath) {
+                        // Navigating to a note
+                        const searchQuery = e.state.searchQuery || '';
+                        this.loadNote(e.state.notePath, false, searchQuery); // false = don't update history
+                        
+                        // Update search box and trigger search if needed
+                        if (searchQuery) {
+                            this.search.query = searchQuery;
                         this.searchNotes();
                     } else {
                         this.search.query = '';
@@ -951,6 +952,9 @@ function noteApp() {
                     this.startPolling();
                 }
             });
+            } catch (error) {
+                console.error('App initialization failed:', error);
+            }
         },
         
         // Load app configuration
@@ -6663,19 +6667,25 @@ function noteApp() {
         // Show a confirm dialog. Returns true if user confirmed, false otherwise.
         showConfirm(message) {
             return new Promise((resolve) => {
-                this.modals.confirm = { show: true, message, resolve };
+                this.modals.confirm.message = message;
+                this.modals.confirm.resolve = resolve;
+                this.modals.confirm.show = true;
             });
         },
         
         // Show an alert dialog (fire-and-forget, no return value)
         showAlert(message) {
-            this.modals.alert = { show: true, message };
+            this.modals.alert.message = message;
+            this.modals.alert.show = true;
         },
         
         // Show a prompt dialog. Returns the entered value, or null if cancelled.
         showPrompt(message, defaultValue = '') {
             return new Promise((resolve) => {
-                this.modals.prompt = { show: true, message, value: defaultValue, resolve };
+                this.modals.prompt.message = message;
+                this.modals.prompt.value = defaultValue;
+                this.modals.prompt.resolve = resolve;
+                this.modals.prompt.show = true;
             });
         },
         
