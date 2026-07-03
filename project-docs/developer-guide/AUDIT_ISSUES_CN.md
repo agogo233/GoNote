@@ -12,7 +12,8 @@
 > 已修复（commit 3df026c）：I-9（scannerDone 超时等待）、S-10（/healthz + /readyz 拆分，notes_dir/scanner/search index 三项检查）— 编译零错误，全量测试通过
 > 已修复（commit 2f2dd77）：I-2（Cache.Get RLock 优化）、I-3（合并双 tag 缓存）、I-10（反向索引 + 锁外读盘）— 编译零错误，全量测试通过
 > 已修复（commit 75ce890）：I-4（Fiber ProxyHeader 使 c.IP() 支持 X-Forwarded-For）、I-5（WebSocket Origin 校验 + ReadLimit/ReadDeadline + 连接上限）— 编译零错误，811 测试全量通过
-> 待修复：S-1, S-2, S-3, S-11, S-12, I-11~I-14, I-16, W-1~W-12
+> 已修复（commit 待补）：S-2（EndpointLimiter 与全局开关解耦）、S-3（共享页 title EscapeString + DOMPurify 清洗 marked 输出）— 编译零错误，811 测试全量通过
+> 待修复：S-1, S-11, S-12, I-11~I-14, I-16, W-1~W-12
 
 ## 复核结果总览
 
@@ -39,9 +40,9 @@
 - **影响**：默认配置下所有 `/api/*`（读写、删除、搜索、媒体、分享）对任意访客开放。公网暴露即等于全部笔记泄露+任意文件写。
 - **修复建议**：`authentication.enabled` 默认改为 `true`；自检默认密码/secret_key 仍为占位值时 `Fatal` 拒绝启动；绑定 `0.0.0.0` 且 `enabled=false` 时拒绝启动。
 
-### S-2 速率限制默认关闭，登录爆破/API 滥用无防护
+### S-2 速率限制默认关闭，登录爆破/API 滥用无防护 ✅已修复
 
-- **状态**：确认成立
+- **状态**：确认成立 → 已修复
 - **证据**：
   - `go/config.yaml:103` `enabled: false`
   - `go/internal/middleware/limiter.go:35-42`
@@ -52,11 +53,11 @@
     ```
   - `go/cmd/server/main.go:274` `app.Post("/login", middleware.EndpointLimiterSimple(10), authHandler.Login)`
 - **影响**：`EndpointLimiter` 在全局关闭时短路为 noop，`/login` 等敏感端点完全无限流，可暴力破解默认密码 `admin`。
-- **修复建议**：将端点级限流与全局开关解耦——`/login`、`/upload`、`/api/notes` 保存等高敏端点始终启用基础限流；登录失败加延迟/指数退避。
+- **修复说明**：`EndpointLimiter` 移除全局开关检查，始终返回真实限流器。`/login`、`/upload`、API 保存端点等独立于全局开关强制执行端点级限流。`TestEndpointLimiterWithGlobalDisabled` 验证全局禁用下端点限流仍生效。
 
-### S-3 共享页存储型 XSS（title 未转义 + marked 默认渲染 HTML）
+### S-3 共享页存储型 XSS（title 未转义 + marked 默认渲染 HTML） ✅已修复
 
-- **状态**：确认成立
+- **状态**：确认成立 → 已修复
 - **证据**：
   - `go/internal/services/export.go:107` `<title>` + title + `</title>`（title 未 `html.EscapeString`）
   - `go/internal/services/export.go:262-264`
@@ -66,7 +67,7 @@
   - `marked.setOptions` 仅设 `gfm/breaks/headerIds/mangle`，无 `sanitize`/`sanitizer`
   - escapeJS 仅转义 `\\\"`、`\n\r\t`、`</`，不阻止 `<script>...</script>`
 - **影响**：`/share/:token` 公开头，笔记标题含 `</title><script>...</script>` 或 markdown 含 `<img onerror>` 即可执行任意 JS。
-- **修复建议**：① title 做 `html.EscapeString`；② 共享页 Markdown 改用服务端渲染并严格转义 raw HTML，或客户端引入 DOMPurify 清洗 `marked.parse` 输出；③ 笔记路径校验禁止含 `<`、`>` 字符。
+- **修复说明**：① title 使用 `html.EscapeString` 转义；② 共享页内联 DOMPurify（`shared/frontend/libs/dompurify/3.2.4/purify.min.js`），`marked.parse` 输出经 `DOMPurify.sanitize()` 清洗后注入。
 
 ### S-4 首次后台扫描 panic 后 ready 永不关闭 → 所有 list 请求永久阻塞 ✅已修复（commit 1d9b898）
 
@@ -337,8 +338,8 @@
 ### 第 1 批 · 止血（安全+稳定，1-2 周）
 
 1. **S-1** 默认启用认证 + 自检默认密码/secret 拒绝启动
-2. **S-2** 限流与全局开关解耦，登录/上传/保存端点强制启用
-3. **S-3** 共享页 XSS（title EscapeString + DOMPurify）
+2. **S-2** 限流与全局开关解耦，登录/上传/保存端点强制启用 ✅已修复
+3. **S-3** 共享页 XSS（title EscapeString + DOMPurify） ✅已修复
 4. **S-5** 注册 `recover.New()` 中间件 ✅已修复
 5. **S-4** scanner panic 加 `defer close(s.ready)` ✅已修复
 6. **S-9** 容器改非 root 用户 ✅已修复

@@ -118,7 +118,8 @@ func TestRateLimiterDifferentIPs(t *testing.T) {
 	assert.Equal(t, 429, resp.StatusCode)
 }
 
-func TestEndpointLimiterDisabled(t *testing.T) {
+func TestEndpointLimiterWithGlobalDisabled(t *testing.T) {
+	// Endpoint limiter should still work even when global rate limiting is disabled
 	cfg := &config.Config{
 		RateLimit: config.RateLimitConfig{
 			Enabled: false,
@@ -128,18 +129,26 @@ func TestEndpointLimiterDisabled(t *testing.T) {
 	defer func() { config.GlobalConfig = nil }()
 
 	app := fiber.New()
-	app.Use(EndpointLimiter(5, 60))
+	app.Use(EndpointLimiter(3, 1))
 	app.Get("/", func(c *fiber.Ctx) error {
 		return c.SendString("ok")
 	})
 
-	// Should allow all requests when disabled
-	for i := 0; i < 10; i++ {
+	// First 3 requests should succeed
+	for i := 0; i < 3; i++ {
 		req := httptest.NewRequest("GET", "/", nil)
+		req.RemoteAddr = "192.168.1.1:1234"
 		resp, err := app.Test(req)
 		assert.NoError(t, err)
 		assert.Equal(t, 200, resp.StatusCode)
 	}
+
+	// 4th request should be rate limited (endpoint limiter is independent of global)
+	req := httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "192.168.1.1:1234"
+	resp, err := app.Test(req)
+	assert.NoError(t, err)
+	assert.Equal(t, 429, resp.StatusCode)
 }
 
 func TestEndpointLimiterEnabled(t *testing.T) {

@@ -33,14 +33,6 @@ func RateLimiter() fiber.Handler {
 
 // EndpointLimiter creates a rate limiter for specific endpoints
 func EndpointLimiter(max int, durationSeconds int) fiber.Handler {
-	cfg := config.GlobalConfig
-	// If global rate limiting is disabled, skip endpoint limiting too
-	if cfg != nil && !cfg.RateLimit.Enabled {
-		return func(c *fiber.Ctx) error {
-			return c.Next()
-		}
-	}
-
 	return limiter.New(limiter.Config{
 		Max:        max,
 		Expiration: time.Duration(durationSeconds) * time.Second,

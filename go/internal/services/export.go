@@ -96,6 +96,7 @@ func (s *ExportService) GenerateExportHTML(title, content, themeCSS string, isDa
 	highlightThemeCss := s.readLibFile("highlight.js/11.11.1/styles/" + highlightTheme + ".min.css")
 	mathJaxJs := s.readLibFile("mathjax/3.2.2/es5/tex-mml-chtml.js")
 	mermaidJs := s.readLibFile("mermaid/11.12.2/dist/mermaid.min.js")
+	dompurifyJs := s.readLibFile("dompurify/3.2.4/purify.min.js")
 
 	// Build HTML template using string concatenation to avoid backtick issues
 	// Inline all library code for fully self-contained export (works offline, on any device)
@@ -104,7 +105,7 @@ func (s *ExportService) GenerateExportHTML(title, content, themeCSS string, isDa
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>` + title + `</title>
+    <title>` + html.EscapeString(title) + `</title>
 
     <!-- Highlight.js for code syntax highlighting (inline) -->
     <style>` + highlightThemeCss + `</style>
@@ -112,6 +113,9 @@ func (s *ExportService) GenerateExportHTML(title, content, themeCSS string, isDa
 
     <!-- Marked.js for markdown parsing (inline) -->
     <script>` + s.readLibFile("marked/12.0.2/marked.min.js") + `<` + `/script>
+
+    <!-- DOMPurify for XSS sanitization (inline) -->
+    <script>` + dompurifyJs + `<` + `/script>
 
     <!-- MathJax for LaTeX math rendering (inline) -->
     <script>
@@ -261,7 +265,7 @@ func (s *ExportService) GenerateExportHTML(title, content, themeCSS string, isDa
     <script>
         marked.setOptions({ gfm: true, breaks: true, headerIds: true, mangle: false });
         const markdown = "` + escapedContent + `";
-        document.getElementById('content').innerHTML = marked.parse(markdown);
+        document.getElementById('content').innerHTML = DOMPurify.sanitize(marked.parse(markdown));
     </script>
 </body>
 </html>`
