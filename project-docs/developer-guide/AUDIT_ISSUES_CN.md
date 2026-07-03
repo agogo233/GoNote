@@ -9,6 +9,7 @@
 > 已修复（commit 1d9b898）：S-4, S-5, S-6, S-7, S-8, S-9 — 编译零错误，799 测试全量通过
 > 已修复（commit 82a22d5）：I-1（per-path mutex + mtime 乐观锁 + 409 冲突响应）、I-15（多槽草稿 + dirty 追踪 + beforeunload + 409 冲突 banner）— 编译零错误，799 测试全量通过
 > 已修复（commit 5815276）：I-6（原子写）、I-7（路径校验统一）、I-8（共享 token TTL + 原子写 + 坏文件备份告警）— 编译零错误，全量测试通过
+> 已修复（commit 3df026c）：I-9（scannerDone 超时等待）、S-10（/healthz + /readyz 拆分，notes_dir/scanner/search index 三项检查）— 编译零错误，全量测试通过
 > 待修复：S-1, S-2, S-3, S-11, S-12, I-2~I-5, I-10~I-14, I-16, W-1~W-12
 
 ## 复核结果总览
