@@ -121,10 +121,11 @@ type GraphNode struct {
 
 // NoteSaveResponse represents response from saving a note
 type NoteSaveResponse struct {
-	Success bool   `json:"success"`
-	Path    string `json:"path"`
-	Message string `json:"message"`
-	Content string `json:"content"`
+	Success  bool   `json:"success"`
+	Path     string `json:"path"`
+	Message  string `json:"message"`
+	Content  string `json:"content"`
+	Modified string `json:"modified"`
 }
 
 // NoteMoveResponse represents response from moving a note

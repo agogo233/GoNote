@@ -2,6 +2,7 @@ package services
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -14,6 +15,8 @@ import (
 
 	"gonote/internal/models"
 )
+
+var ErrConflict = errors.New("note conflict: modified by another source")
 
 // Cache key prefixes for fine-grained invalidation
 const (
@@ -34,6 +37,7 @@ type NoteService struct {
 	onScanComplete func()         // Callback after scan completes (for WebSocket broadcast)
 	searchIndex    *SearchIndex   // 注入：performScan 增量同步搜索索引
 	fileMtimes     sync.Map       // path → time.Time（已知 mtime 的 snapshot），用于增量同步
+	pathMu         sync.Map       // path → *sync.Mutex（per-path 写入串行锁）
 }
 
 type scanCacheEntry struct {
@@ -267,8 +271,21 @@ func (s *NoteService) GetNoteContent(notePath string) (string, error) {
 	return string(content), nil
 }
 
-// SaveNote saves content to a note
+// getMu returns (and lazily creates) a per-path mutex for serializing writes.
+func (s *NoteService) getMu(path string) *sync.Mutex {
+	mu, _ := s.pathMu.LoadOrStore(path, &sync.Mutex{})
+	return mu.(*sync.Mutex)
+}
+
+// SaveNote saves content to a note (backward-compatible: no optimistic lock).
 func (s *NoteService) SaveNote(notePath, content string) error {
+	return s.SaveNoteWithCheck(notePath, content, "")
+}
+
+// SaveNoteWithCheck saves content to a note with optional mtime-based optimistic lock.
+// If knownMtime is non-empty and does not match the current file mtime, returns ErrConflict.
+// The caller should pass an empty knownMtime to skip the check (backward-compatible).
+func (s *NoteService) SaveNoteWithCheck(notePath, content, knownMtime string) error {
 	if !strings.HasSuffix(notePath, ".md") {
 		notePath += ".md"
 	}
@@ -279,19 +296,33 @@ func (s *NoteService) SaveNote(notePath, content string) error {
 		return fmt.Errorf("invalid path")
 	}
 
+	mu := s.getMu(notePath)
+	mu.Lock()
+	defer mu.Unlock()
+
+	// Optimistic lock: if knownMtime provided, check current file mtime.
+	if knownMtime != "" {
+		info, err := os.Stat(fullPath)
+		if err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("stat note: %w", err)
+		}
+		if err == nil {
+			currentMtime := info.ModTime().UTC().Format(time.RFC3339Nano)
+			if currentMtime != knownMtime {
+				return ErrConflict
+			}
+		}
+		// File does not exist yet (new note): skip check, proceed to create.
+	}
+
 	if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
 		return err
 	}
 
-	// Write first, then invalidate cache.
-	// This prevents a read race: before this fix, invalidation happened before write,
-	// so a reader arriving in between would see a cache miss, fall back to scanning,
-	// and potentially read a partially-written file.
 	if err := os.WriteFile(fullPath, []byte(content), 0644); err != nil {
 		return err
 	}
 
-	// Fine-grained cache invalidation after successful write
 	s.invalidateNoteCache(notePath)
 
 	return nil

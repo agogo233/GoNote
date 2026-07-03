@@ -91,19 +91,35 @@ POST /api/notes/{note_path}
 Content-Type: application/json
 
 {
-  "content": "# My Note\nNote content here..."
+  "content": "# My Note\nNote content here...",
+  "modified": "2026-07-03T14:30:00.123456789Z"
 }
 ```
 
-**Response:**
+- `content` (required): Full Markdown content
+- `modified` (optional): ISO 8601 timestamp of the last known file modification time (from a previous `GET /api/notes/{note_path}` response). If provided and the file has been modified by another source since, returns **409 Conflict**. Omit or pass empty string to skip the optimistic lock check (backward-compatible).
+
+**Success Response (200):**
 ```json
 {
   "success": true,
   "path": "test.md",
-  "message": "Note created/updated successfully",
-  "content": "# My Note\nNote content here..."
+  "message": "Note saved successfully",
+  "content": "# My Note\nNote content here...",
+  "modified": "2026-07-03T14:30:05.987654321Z"
 }
 ```
+
+- `modified`: Server-authoritative file modification timestamp after save.
+
+**Conflict Response (409):**
+```json
+{
+  "detail": "Note modified by another source",
+  "modified": "2026-07-03T14:30:05.987654321Z"
+}
+```
+- The `modified` field contains the current server-side mtime. The client should prompt the user to either "Load Server Version" or "Keep My Version (Overwrite)".
 
 **Linux/Mac:**
 ```bash

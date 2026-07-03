@@ -105,25 +105,41 @@ Content-Type: application/json
 |--------|------|------|------|
 | note_path | string | 是 | URL 路径中的笔记文件路径 |
 | content | string | 是 | 请求体中的完整 Markdown 内容 |
+| modified | string | 否 | 客户端已知的最近一次文件修改时间（ISO 8601 格式，来自 `GET /api/notes/{note_path}` 响应）。若提供且服务端文件已被其他来源修改，返回 **409 Conflict**。省略或传空字符串则跳过乐观锁检查（向后兼容）。 |
 
 **请求体 (Request Body):**
 
 ```json
 {
-  "content": "# 我的笔记\n\n这是笔记内容..."
+  "content": "# 我的笔记\n\n这是笔记内容...",
+  "modified": "2026-07-03T14:30:00.123456789Z"
 }
 ```
 
-**响应 (Response):**
+**成功响应 (200):**
 
 ```json
 {
   "success": true,
   "path": "my-note.md",
   "message": "笔记已保存",
-  "content": "# 我的笔记\n\n这是笔记内容..."
+  "content": "# 我的笔记\n\n这是笔记内容...",
+  "modified": "2026-07-03T14:30:05.987654321Z"
 }
 ```
+
+- `modified`：保存后服务端文件的权威修改时间戳。
+
+**冲突响应 (409 Conflict):**
+
+```json
+{
+  "detail": "Note modified by another source",
+  "modified": "2026-07-03T14:30:05.987654321Z"
+}
+```
+
+- `modified` 字段包含服务端当前 mtime。客户端应提示用户选择"加载服务器版本"或"保留我的版本（覆盖）"。
 
 **注意 (Note):**
 

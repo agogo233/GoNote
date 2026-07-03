@@ -95,7 +95,18 @@
     "open_first": "Please open a note first before uploading images.",
     "save_failed": "Save failed. Content backed up locally.",
     "unsaved_changes": "Unsaved Changes Found",
-    "restore_prompt": "Found unsaved changes for \"{name}\" from {time}. Restore them?"
+    "restore_prompt": "Found unsaved changes for \"{name}\" from {time}. Restore them?",
+    "unsaved_drafts": "Unsaved Drafts",
+    "discard_all": "Discard All",
+    "remind_later": "Remind Later",
+    "conflict_draft_older": "Server has newer version",
+    "draft_saved_at": "Draft saved",
+    "server_version_at": "Server version",
+    "choose_version": "Choose which version to keep:",
+    "load_draft": "Load Draft",
+    "load_server_version": "Load Server Version",
+    "conflict_external_modified": "Note modified by another source",
+    "keep_my_version": "Keep My Version (Overwrite)"
   },
 
   "folders": {

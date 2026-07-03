@@ -1,8 +1,12 @@
 package handlers
 
 import (
+	"errors"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 
@@ -129,14 +133,28 @@ func (h *NoteHandler) CreateOrUpdate(c *fiber.Ctx) error {
 
 	// Parse request body
 	var req struct {
-		Content string `json:"content"`
+		Content  string `json:"content"`
+		Modified string `json:"modified,omitempty"`
 	}
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(400).JSON(fiber.Map{"detail": "Invalid request body"})
 	}
 
-	// Save note
-	if err := h.service.SaveNote(notePath, req.Content); err != nil {
+	// Save note with optional mtime-based optimistic lock
+	err = h.service.SaveNoteWithCheck(notePath, req.Content, req.Modified)
+	if err != nil {
+		if errors.Is(err, services.ErrConflict) {
+			fullPath := filepath.Join(h.config.Storage.NotesDir, notePath)
+			info, statErr := os.Stat(fullPath)
+			serverMtime := ""
+			if statErr == nil {
+				serverMtime = info.ModTime().UTC().Format(time.RFC3339Nano)
+			}
+			return c.Status(409).JSON(fiber.Map{
+				"detail":   "Note modified by another source",
+				"modified": serverMtime,
+			})
+		}
 		return fiber.NewError(500, err.Error())
 	}
 
@@ -152,11 +170,20 @@ func (h *NoteHandler) CreateOrUpdate(c *fiber.Ctx) error {
 		h.searchIndex.UpdateIndex(notePath)
 	}
 
+	// Get authoritative mtime after save
+	fullPath := filepath.Join(h.config.Storage.NotesDir, notePath)
+	info, statErr := os.Stat(fullPath)
+	serverMtime := ""
+	if statErr == nil {
+		serverMtime = info.ModTime().UTC().Format(time.RFC3339Nano)
+	}
+
 	return c.JSON(models.NoteSaveResponse{
-		Success: true,
-		Path:    notePath,
-		Message: "Note saved successfully",
-		Content: req.Content,
+		Success:  true,
+		Path:     notePath,
+		Message:  "Note saved successfully",
+		Content:  req.Content,
+		Modified: serverMtime,
 	})
 }
 

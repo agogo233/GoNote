@@ -95,7 +95,18 @@
     "open_first": "请先打开一篇笔记，然后再上传图片。",
     "save_failed": "保存失败。内容已备份到本地。",
     "unsaved_changes": "发现未保存的更改",
-    "restore_prompt": "发现 \"{name}\" 在 {time} 有未保存的更改。是否恢复？"
+    "restore_prompt": "发现 \"{name}\" 在 {time} 有未保存的更改。是否恢复？",
+    "unsaved_drafts": "未保存的草稿",
+    "discard_all": "全部丢弃",
+    "remind_later": "稍后再说",
+    "conflict_draft_older": "服务器有更新版本",
+    "draft_saved_at": "草稿保存时间",
+    "server_version_at": "服务器版本时间",
+    "choose_version": "请选择要保留的版本：",
+    "load_draft": "加载草稿",
+    "load_server_version": "加载服务器版本",
+    "conflict_external_modified": "该笔记已被外部修改",
+    "keep_my_version": "保留我的版本（覆盖）"
   },
 
   "folders": {

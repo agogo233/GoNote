@@ -723,8 +723,23 @@ function noteApp() {
                 await this.loadTemplates();
                 this.loadLocalSettings();
                 
-                // Check for pending saves (failed saves from previous session)
-                this.checkAndRestorePendingSave();
+                // Check for unsaved drafts from previous session
+                this.checkAndRestoreDrafts();
+                
+                // Warn on page close if there are unsaved changes
+                window.addEventListener('beforeunload', (e) => {
+                    if (this.note && this.note.dirty) {
+                        e.preventDefault();
+                        e.returnValue = '';
+                    }
+                });
+                
+                // Periodic draft save while editing
+                this._draftTimer = setInterval(() => {
+                    if (this.note && this.note.dirty && this.note.current && this.note.content) {
+                        this.writeDraft(this.note.current, this.note.content);
+                    }
+                }, 2000);
                 
                 // Parse URL and load specific note if provided
                 this.loadItemFromURL();
@@ -3298,6 +3313,9 @@ function noteApp() {
                 });
                 
                 if (response.ok) {
+                    // Clear draft for old path
+                    if (isNote) this.clearDraft(decodedDraggedPath);
+                    
                     // Update favorites if the moved note was favorited
                     if (wasFavorited) {
                         const newFavorites = this._favoritesState.list.map(f => f === decodedDraggedPath ? newPath : f);
@@ -3370,6 +3388,8 @@ function noteApp() {
                 this.media.current = ''; // Clear image viewer when loading a note
                 this.modals.share.info = null; // Reset share info for new note
                 this.note.backlinks = []; // Clear backlinks cache for new note
+                this.note.modified = data.metadata ? data.metadata.modified : '';
+                this.note.dirty = false;
                 
                 // Update browser tab title
                 document.title = `${this.note.name} - ${this.app.name}`;
@@ -4164,6 +4184,7 @@ function noteApp() {
                 clearTimeout(this.note.saveTimeout);
             }
             
+            this.note.dirty = true;
             this.note.lastSaved = false;
             
             // Push to undo history (but not during undo/redo operations)
@@ -4536,19 +4557,27 @@ function noteApp() {
                 const response = await secureFetch(`/api/notes/${encodedPath}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ content: contentToSave })
+                    body: JSON.stringify({
+                        content: contentToSave,
+                        modified: this.note.modified || ''
+                    })
                 });
                 
                 if (response.ok) {
+                    const data = await response.json();
                     this.note.lastSaved = true;
                     
                     // Clear localStorage backup on successful save
-                    this.clearPendingSave();
+                    this.clearDraft(notePath);
                     
-                    // Update only the modified timestamp for the current note (no full reload needed)
+                    // Update using server-authoritative mtime
+                    this.note.modified = data.modified || '';
+                    this.note.dirty = false;
+                    
+                    // Update list cache entry
                     const note = this.notes.find(n => n.path === notePath);
                     if (note) {
-                        note.modified = new Date().toISOString();
+                        note.modified = data.modified || '';
                         note.size = new Blob([contentToSave]).size;
                         
                         // Parse tags from content
@@ -4572,12 +4601,19 @@ function noteApp() {
                     this.note.isSaving = false;
                     this._savingNotePath = null;
                     this._currentSaveId = null;
+                } else if (response.status === 409) {
+                    // Conflict: note was modified by another source
+                    this.note.isSaving = false;
+                    this._savingNotePath = null;
+                    this._currentSaveId = null;
+                    const data = await response.json().catch(() => ({}));
+                    this.showConflictBanner(notePath, data.modified || '');
                 } else {
                     throw new Error(`Server returned error: ${response.status}`);
                 }
             } catch (error) {
-                // Save to localStorage as backup before retrying (use current content)
-                this.savePendingToLocalStorage(notePath, contentToSave);
+                // Save to localStorage as backup before retrying
+                this.writeDraft(notePath, contentToSave);
                 
                 // Retry with exponential backoff
                 if (retryCount < CONFIG.MAX_SAVE_RETRIES) {
@@ -4598,193 +4634,354 @@ function noteApp() {
             }
             // No finally block - isSaving is managed explicitly above
         },
-        
-        // Save pending content to localStorage as backup
-        savePendingToLocalStorage(path = null, content = null) {
-            const notePath = path || this.note.current;
-            const noteContent = content || this.note.content;
-            
-            if (!notePath || !noteContent) return;
-            
+
+        // Write draft to localStorage (multi-slot, per-path)
+        writeDraft(path, content) {
+            if (!path || !content) return;
             try {
-                const pendingData = {
-                    path: notePath,
-                    content: noteContent,
+                localStorage.setItem('gonote_draft:' + path, JSON.stringify({
+                    content: content,
                     timestamp: Date.now()
-                };
-                localStorage.setItem('gonote_pending_save', JSON.stringify(pendingData));
+                }));
             } catch (e) {
-                console.warn('Failed to save to localStorage:', e);
+                if (e.name === 'QuotaExceededError' || e.code === 22) {
+                    // Quota exceeded: remove 10 oldest drafts and retry
+                    const drafts = this.listDrafts().sort((a, b) => a.timestamp - b.timestamp);
+                    drafts.slice(0, 10).forEach(d => {
+                        try { localStorage.removeItem('gonote_draft:' + d.path); } catch (_) {}
+                    });
+                    try {
+                        localStorage.setItem('gonote_draft:' + path, JSON.stringify({
+                            content: content,
+                            timestamp: Date.now()
+                        }));
+                    } catch (_) {}
+                }
             }
         },
-        
-        // Clear pending save from localStorage
-        clearPendingSave() {
+
+        // Clear draft for a specific path
+        clearDraft(path) {
+            if (!path) return;
             try {
-                localStorage.removeItem('gonote_pending_save');
+                localStorage.removeItem('gonote_draft:' + path);
             } catch (e) {
-                console.warn('Failed to clear localStorage:', e);
+                console.warn('Failed to clear draft:', e);
             }
         },
-        
-        // Check and restore pending save on init
-        checkPendingSave() {
+
+        // List all drafts, removing those older than 7 days
+        listDrafts() {
+            const drafts = [];
+            const now = Date.now();
+            const maxAge = 7 * 24 * 60 * 60 * 1000;
             try {
-                const pending = localStorage.getItem('gonote_pending_save');
-                if (pending) {
-                    const data = JSON.parse(pending);
-                    // Only restore if less than 24 hours old
-                    if (Date.now() - data.timestamp < 24 * 60 * 60 * 1000) {
-                        return data;
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (key && key.startsWith('gonote_draft:')) {
+                        const data = JSON.parse(localStorage.getItem(key));
+                        if (now - data.timestamp > maxAge) {
+                            localStorage.removeItem(key);
+                            continue;
+                        }
+                        drafts.push({
+                            path: key.slice('gonote_draft:'.length),
+                            content: data.content,
+                            timestamp: data.timestamp
+                        });
                     }
-                    // Clear old pending save
-                    this.clearPendingSave();
                 }
             } catch (e) {
-                console.warn('Failed to check pending save:', e);
+                console.warn('Failed to list drafts:', e);
             }
-            return null;
+            return drafts;
         },
-        
+
+        // Check and restore drafts on startup
+        checkAndRestoreDrafts() {
+            const drafts = this.listDrafts();
+            if (drafts.length > 0) {
+                this.showDraftsRestoreModal(drafts);
+            }
+        },
+
+        // Show draft restore modal (multi-draft list)
+        showDraftsRestoreModal(drafts) {
+            const modal = document.createElement('div');
+            modal.id = 'drafts-restore-modal';
+            modal.style.cssText = `
+                position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+                background: rgba(0,0,0,0.5); display: flex;
+                align-items: center; justify-content: center; z-index: 10001;
+            `;
+
+            const container = document.createElement('div');
+            container.style.cssText = `
+                background: var(--bg-primary, #1e1e1e);
+                color: var(--text-primary, #e0e0e0);
+                padding: 24px; border-radius: 12px;
+                max-width: 480px; width: 90%;
+                box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+                max-height: 80vh; overflow-y: auto;
+            `;
+
+            let itemsHtml = '';
+            drafts.sort((a, b) => b.timestamp - a.timestamp).forEach(d => {
+                const timeAgo = this.formatTimeAgo(d.timestamp);
+                const noteName = d.path.split('/').pop().replace('.md', '');
+                itemsHtml += `
+                    <div class="draft-item" style="
+                        display: flex; align-items: center; justify-content: space-between;
+                        padding: 10px 0; border-bottom: 1px solid var(--border-color, #333);
+                    ">
+                        <div style="flex: 1; min-width: 0;">
+                            <div style="font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">📄 ${noteName}</div>
+                            <div style="font-size: 12px; color: var(--text-secondary, #888);">${timeAgo}</div>
+                        </div>
+                        <div style="display: flex; gap: 8px; flex-shrink: 0; margin-left: 12px;">
+                            <button class="draft-restore-btn" data-path="${d.path}" style="
+                                padding: 6px 12px; font-size: 12px;
+                                border: none; background: #3b82f6; color: white;
+                                border-radius: 4px; cursor: pointer;
+                            ">${this.t('common.restore') || 'Restore'}</button>
+                            <button class="draft-discard-btn" data-path="${d.path}" style="
+                                padding: 6px 12px; font-size: 12px;
+                                border: 1px solid var(--border-color, #444); background: transparent;
+                                color: var(--text-primary, #e0e0e0); border-radius: 4px; cursor: pointer;
+                            ">${this.t('common.discard') || 'Discard'}</button>
+                        </div>
+                    </div>
+                `;
+            });
+
+            const count = drafts.length;
+            container.innerHTML = `
+                <h3 style="margin: 0 0 16px 0; font-size: 18px;">
+                    ${this.t('notes.unsaved_drafts') || 'Unsaved Drafts'} (${count})
+                </h3>
+                <div style="margin-bottom: 16px;">${itemsHtml}</div>
+                <div style="display: flex; gap: 8px; justify-content: flex-end; padding-top: 8px; border-top: 1px solid var(--border-color, #333);">
+                    <button id="drafts-discard-all-btn" style="
+                        padding: 8px 16px; font-size: 13px;
+                        border: 1px solid var(--border-color, #444); background: transparent;
+                        color: var(--text-primary, #e0e0e0); border-radius: 6px; cursor: pointer;
+                    ">${this.t('notes.discard_all') || 'Discard All'}</button>
+                    <button id="drafts-remind-later-btn" style="
+                        padding: 8px 16px; font-size: 13px;
+                        border: 1px solid var(--border-color, #444); background: transparent;
+                        color: var(--text-primary, #e0e0e0); border-radius: 6px; cursor: pointer;
+                    ">${this.t('notes.remind_later') || 'Remind Later'}</button>
+                </div>
+            `;
+
+            modal.appendChild(container);
+            document.body.appendChild(modal);
+
+            // Handle individual restore
+            container.querySelectorAll('.draft-restore-btn').forEach(btn => {
+                btn.onclick = () => {
+                    const path = btn.dataset.path;
+                    const draft = drafts.find(d => d.path === path);
+                    if (draft) this.restoreSingleDraft(draft, drafts);
+                };
+            });
+
+            // Handle individual discard
+            container.querySelectorAll('.draft-discard-btn').forEach(btn => {
+                btn.onclick = () => {
+                    this.clearDraft(btn.dataset.path);
+                    btn.closest('.draft-item').remove();
+                    if (container.querySelectorAll('.draft-item').length === 0) {
+                        document.body.removeChild(modal);
+                    }
+                };
+            });
+
+            // Discard all
+            document.getElementById('drafts-discard-all-btn').onclick = () => {
+                drafts.forEach(d => this.clearDraft(d.path));
+                document.body.removeChild(modal);
+            };
+
+            // Remind later - just close
+            document.getElementById('drafts-remind-later-btn').onclick = () => {
+                document.body.removeChild(modal);
+            };
+
+            // Close on background click
+            modal.onclick = (e) => {
+                if (e.target === modal) document.body.removeChild(modal);
+            };
+        },
+
+        // Restore a single draft (with conflict check)
+        restoreSingleDraft(draft, drafts) {
+            this.loadNote(draft.path).then(() => {
+                const serverMtime = this.note.modified;
+                const draftTime = draft.timestamp;
+                const serverTime = serverMtime ? Date.parse(serverMtime) : 0;
+
+                if (serverTime > draftTime) {
+                    // Server has newer content: prompt conflict resolution
+                    this.showDraftConflictModal(draft, drafts);
+                } else {
+                    // Draft is newer or server has no timestamp: restore directly
+                    this.note.content = draft.content;
+                    this.note.dirty = true;
+                    this.clearDraft(draft.path);
+                    // Close the restore modal
+                    const modal = document.getElementById('drafts-restore-modal');
+                    if (modal) document.body.removeChild(modal);
+                }
+            });
+        },
+
+        // Show draft vs server conflict modal
+        showDraftConflictModal(draft, drafts) {
+            const modal = document.createElement('div');
+            modal.id = 'draft-conflict-modal';
+            modal.style.cssText = `
+                position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+                background: rgba(0,0,0,0.5); display: flex;
+                align-items: center; justify-content: center; z-index: 10002;
+            `;
+
+            const timeAgo = this.formatTimeAgo(draft.timestamp);
+            const serverTimeStr = this.note.modified ? new Date(this.note.modified).toLocaleString() : 'unknown';
+
+            const container = document.createElement('div');
+            container.style.cssText = `
+                background: var(--bg-primary, #1e1e1e);
+                color: var(--text-primary, #e0e0e0);
+                padding: 24px; border-radius: 12px; max-width: 420px;
+                box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+            `;
+            container.innerHTML = `
+                <h3 style="margin: 0 0 12px 0; font-size: 16px;">⚠ ${this.t('notes.conflict_draft_older') || 'Server has newer version'}</h3>
+                <p style="margin: 0 0 8px 0; font-size: 13px; color: var(--text-secondary, #888);">
+                    ${this.t('notes.draft_saved_at') || 'Draft saved'}: ${timeAgo}<br>
+                    ${this.t('notes.server_version_at') || 'Server version'}: ${serverTimeStr}
+                </p>
+                <p style="margin: 0 0 16px 0; font-size: 13px; color: var(--text-secondary, #888);">
+                    ${this.t('notes.choose_version') || 'Choose which version to keep:'}
+                </p>
+                <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                    <button id="draft-load-draft-btn" style="
+                        padding: 8px 16px; font-size: 13px;
+                        border: none; background: #3b82f6; color: white; border-radius: 6px; cursor: pointer;
+                    ">${this.t('notes.load_draft') || 'Load Draft'}</button>
+                    <button id="draft-load-server-btn" style="
+                        padding: 8px 16px; font-size: 13px;
+                        border: 1px solid var(--border-color, #444); background: transparent;
+                        color: var(--text-primary, #e0e0e0); border-radius: 6px; cursor: pointer;
+                    ">${this.t('notes.load_server_version') || 'Load Server Version'}</button>
+                </div>
+            `;
+
+            modal.appendChild(container);
+            document.body.appendChild(modal);
+
+            document.getElementById('draft-load-draft-btn').onclick = () => {
+                this.note.content = draft.content;
+                this.note.dirty = true;
+                this.clearDraft(draft.path);
+                document.body.removeChild(modal);
+                const restoreModal = document.getElementById('drafts-restore-modal');
+                if (restoreModal) document.body.removeChild(restoreModal);
+            };
+
+            document.getElementById('draft-load-server-btn').onclick = () => {
+                this.loadNote(draft.path);
+                this.clearDraft(draft.path);
+                document.body.removeChild(modal);
+                const restoreModal = document.getElementById('drafts-restore-modal');
+                if (restoreModal) document.body.removeChild(restoreModal);
+            };
+
+            modal.onclick = (e) => {
+                if (e.target === modal) document.body.removeChild(modal);
+            };
+        },
+
+        // Show conflict banner when server returns 409
+        showConflictBanner(notePath, serverMtime) {
+            // Remove existing banner if any
+            const existing = document.getElementById('conflict-banner');
+            if (existing) existing.remove();
+
+            const banner = document.createElement('div');
+            banner.id = 'conflict-banner';
+            banner.style.cssText = `
+                position: fixed; top: 0; left: 0; right: 0;
+                background: #f59e0b; color: #1e1e1e;
+                padding: 12px 20px; display: flex;
+                align-items: center; justify-content: center; gap: 12px;
+                z-index: 10000; font-size: 14px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            `;
+
+            const serverTimeStr = serverMtime ? new Date(serverMtime).toLocaleString() : '';
+
+            banner.innerHTML = `
+                <span>⚠ ${this.t('notes.conflict_external_modified') || 'Note modified by another source'}${serverTimeStr ? ' at ' + serverTimeStr : ''}</span>
+                <button id="conflict-load-server-btn" style="
+                    padding: 6px 12px; border: none; background: #1e1e1e;
+                    color: #fff; border-radius: 4px; cursor: pointer; font-size: 12px;
+                ">${this.t('notes.load_server_version') || 'Load Server Version'}</button>
+                <button id="conflict-keep-mine-btn" style="
+                    padding: 6px 12px; border: 1px solid #1e1e1e; background: transparent;
+                    color: #1e1e1e; border-radius: 4px; cursor: pointer; font-size: 12px;
+                ">${this.t('notes.keep_my_version') || 'Keep My Version (Overwrite)'}</button>
+            `;
+
+            document.body.insertBefore(banner, document.body.firstChild);
+
+            document.getElementById('conflict-load-server-btn').onclick = () => {
+                this.loadNote(notePath);
+                this.clearDraft(notePath);
+                banner.remove();
+            };
+
+            document.getElementById('conflict-keep-mine-btn').onclick = () => {
+                // Force save without mtime check (clear modified and re-POST)
+                this.note.modified = '';
+                this.clearDraft(notePath);
+                banner.remove();
+                this.saveNote();
+            };
+
+            // Auto-dismiss after 30 seconds
+            setTimeout(() => {
+                if (banner.parentNode) banner.remove();
+            }, 30000);
+},
+
         // Show save error toast (non-blocking notification)
         showSaveErrorToast() {
-            // Create toast element if not exists
             let toast = document.getElementById('save-error-toast');
             if (!toast) {
                 toast = document.createElement('div');
                 toast.id = 'save-error-toast';
                 toast.style.cssText = `
-                    position: fixed;
-                    bottom: 20px;
-                    right: 20px;
-                    background: #dc2626;
-                    color: white;
-                    padding: 12px 20px;
-                    border-radius: 8px;
+                    position: fixed; bottom: 20px; right: 20px;
+                    background: #dc2626; color: white;
+                    padding: 12px 20px; border-radius: 8px;
                     box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-                    z-index: 10000;
-                    font-size: 14px;
-                    max-width: 300px;
-                    opacity: 0;
-                    transform: translateY(20px);
+                    z-index: 10000; font-size: 14px; max-width: 300px;
+                    opacity: 0; transform: translateY(20px);
                     transition: all 0.3s ease;
                 `;
                 document.body.appendChild(toast);
             }
-            
             toast.textContent = this.t('notes.save_failed') || 'Save failed. Content backed up locally.';
             toast.style.opacity = '1';
             toast.style.transform = 'translateY(0)';
-            
-            // Auto hide after 5 seconds
             setTimeout(() => {
                 toast.style.opacity = '0';
                 toast.style.transform = 'translateY(20px)';
             }, 5000);
         },
-        
-        // Check and restore pending save from previous session
-        checkAndRestorePendingSave() {
-            const pending = this.checkPendingSave();
-            if (pending) {
-                // Check if the note still exists
-                const noteExists = this.notes.some(n => n.path === pending.path);
-                
-                if (noteExists) {
-                    // Show restore prompt
-                    this.showRestorePrompt(pending);
-                } else {
-                    // Note was deleted, clear the pending save
-                    this.clearPendingSave();
-                }
-            }
-        },
-        
-        // Show restore prompt for pending save
-        showRestorePrompt(pending) {
-            // Create modal for restore prompt
-            const modal = document.createElement('div');
-            modal.id = 'restore-prompt-modal';
-            modal.style.cssText = `
-                position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                background: rgba(0,0,0,0.5);
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                z-index: 10001;
-            `;
-            
-            const content = document.createElement('div');
-            content.style.cssText = `
-                background: var(--bg-primary, #1e1e1e);
-                color: var(--text-primary, #e0e0e0);
-                padding: 24px;
-                border-radius: 12px;
-                max-width: 400px;
-                box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-            `;
-            
-            const timeAgo = this.formatTimeAgo(pending.timestamp);
-            const noteName = pending.path.split('/').pop().replace('.md', '');
-            
-            content.innerHTML = `
-                <h3 style="margin: 0 0 12px 0; font-size: 18px;">${this.t('notes.unsaved_changes') || 'Unsaved Changes Found'}</h3>
-                <p style="margin: 0 0 16px 0; color: var(--text-secondary, #888);">
-                    ${(this.t('notes.restore_prompt') || 'Found unsaved changes for "{name}" from {time}. Restore them?')
-                        .replace('{name}', noteName)
-                        .replace('{time}', timeAgo)}
-                </p>
-                <div style="display: flex; gap: 12px; justify-content: flex-end;">
-                    <button id="restore-discard-btn" style="
-                        padding: 8px 16px;
-                        border: 1px solid var(--border-color, #444);
-                        background: transparent;
-                        color: var(--text-primary, #e0e0e0);
-                        border-radius: 6px;
-                        cursor: pointer;
-                    ">${this.t('common.discard') || 'Discard'}</button>
-                    <button id="restore-restore-btn" style="
-                        padding: 8px 16px;
-                        border: none;
-                        background: #3b82f6;
-                        color: white;
-                        border-radius: 6px;
-                        cursor: pointer;
-                    ">${this.t('common.restore') || 'Restore'}</button>
-                </div>
-            `;
-            
-            modal.appendChild(content);
-            document.body.appendChild(modal);
-            
-            // Handle button clicks
-            document.getElementById('restore-discard-btn').onclick = () => {
-                this.clearPendingSave();
-                document.body.removeChild(modal);
-            };
-            
-            document.getElementById('restore-restore-btn').onclick = () => {
-                // Load the note and restore content
-                this.loadNote(pending.path).then(() => {
-                    this.note.content = pending.content;
-                    // Trigger autosave after a short delay
-                    setTimeout(() => this.autoSave(), 100);
-                });
-                document.body.removeChild(modal);
-            };
-            
-            // Close on background click
-            modal.onclick = (e) => {
-                if (e.target === modal) {
-                    document.body.removeChild(modal);
-                }
-            };
-        },
-        
+
         // Format timestamp to human readable time ago
         formatTimeAgo(timestamp) {
             const seconds = Math.floor((Date.now() - timestamp) / 1000);
@@ -4889,6 +5086,9 @@ function noteApp() {
                 });
                 
                 if (response.ok) {
+                    // Clear draft if any
+                    this.clearDraft(notePath);
+                    
                     // Remove from favorites if it was favorited
                     if (this._favoritesState.set.has(notePath)) {
                         const newFavorites = this._favoritesState.list.filter(f => f !== notePath);
