@@ -1,28 +1,24 @@
 package services
 
 import (
-	"os"
 	"sort"
 	"strings"
-	"sync"
 
 	"gonote/internal/models"
 )
 
 // TagService handles tag-related operations
+// Tag caching is delegated to NoteService to avoid duplicate caches (I-3).
 type TagService struct {
 	notesDir   string
 	noteService *NoteService  // Shared NoteService instance
-	tagCache   map[string]models.TagCacheEntry
-	tagMutex   sync.RWMutex
 }
 
 // NewTagService creates a new TagService
 func NewTagService(noteService *NoteService, notesDir string) *TagService {
 	return &TagService{
-		notesDir:   notesDir,
+		notesDir:    notesDir,
 		noteService: noteService,
-		tagCache:   make(map[string]models.TagCacheEntry),
 	}
 }
 
@@ -161,46 +157,15 @@ func (s *TagService) scanNotes() ([]models.Note, []string, error) {
 }
 
 // GetTagsCached returns tags for a file with caching
+// Delegates to NoteService's unified tag cache (I-3).
 func (s *TagService) GetTagsCached(filePath string) []string {
-	s.tagMutex.RLock()
-	entry, ok := s.tagCache[filePath]
-	s.tagMutex.RUnlock()
-
-	if ok {
-		// Check if file still has same modification time
-		info, err := os.Stat(filePath)
-		if err == nil && entry.ModifiedTime.Equal(info.ModTime()) {
-			return entry.Tags
-		}
-	}
-
-	// Parse tags from file
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil
-	}
-
-	tags := ParseTags(string(content))
-
-	// Cache the result
-	info, err := os.Stat(filePath)
-	if err == nil {
-		s.tagMutex.Lock()
-		s.tagCache[filePath] = models.TagCacheEntry{
-			ModifiedTime: info.ModTime(),
-			Tags:         tags,
-		}
-		s.tagMutex.Unlock()
-	}
-
-	return tags
+	return s.noteService.GetTagsCached(filePath)
 }
 
 // ClearCache clears the tag cache
+// Delegates to NoteService's unified invalidation (I-3).
 func (s *TagService) ClearCache() {
-	s.tagMutex.Lock()
-	defer s.tagMutex.Unlock()
-	s.tagCache = make(map[string]models.TagCacheEntry)
+	s.noteService.InvalidateCache()
 }
 
 // FilterNotesByTags filters notes that contain ALL specified tags (AND logic)

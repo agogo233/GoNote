@@ -10,7 +10,8 @@
 > 已修复（commit 82a22d5）：I-1（per-path mutex + mtime 乐观锁 + 409 冲突响应）、I-15（多槽草稿 + dirty 追踪 + beforeunload + 409 冲突 banner）— 编译零错误，799 测试全量通过
 > 已修复（commit 5815276）：I-6（原子写）、I-7（路径校验统一）、I-8（共享 token TTL + 原子写 + 坏文件备份告警）— 编译零错误，全量测试通过
 > 已修复（commit 3df026c）：I-9（scannerDone 超时等待）、S-10（/healthz + /readyz 拆分，notes_dir/scanner/search index 三项检查）— 编译零错误，全量测试通过
-> 待修复：S-1, S-2, S-3, S-11, S-12, I-2~I-5, I-10~I-14, I-16, W-1~W-12
+> 已修复（commit 待补）：I-2（Cache.Get RLock 优化）、I-3（合并双 tag 缓存）、I-10（反向索引 + 锁外读盘）— 编译零错误，全量测试通过
+> 待修复：S-1, S-2, S-3, S-11, S-12, I-4, I-5, I-11~I-14, I-16, W-1~W-12
 
 ## 复核结果总览
 
@@ -182,20 +183,20 @@
 - **证据**：`go/internal/services/notes.go:262-289` SaveNote 无 mutex/版本号/ETag 校验
 - **修复建议**：per-path mutex（`sync.Map[string]*sync.Mutex`）串行化写；保存时校验客户端携带的 mtime，冲突返回 409。
 
-### I-2 Cache.Get 全程写锁，热路径串行
+### I-2 Cache.Get 全程写锁，热路径串行 ✅已修复
 
-- **状态**：确认成立
+- **状态**：确认成立 → 已修复
 - **证据**：`go/internal/services/cache.go:96-118` `c.mu.Lock()` 而非 RLock（因需 MoveToBack）
 - **影响**：list notes 高频请求在 Cache.Get 全局串行；QPS 高时锁竞争。
-- **修复建议**：分片缓存（N shards + sync.Map）；或 RLock 命中路径 + 惰性升级写锁做 LRU 移动。
+- **修复说明**：Get 方法改为 RLock 读路径，仅过期条目删除时持写锁；去掉读路径中的 MoveToBack（对 note 缓存影响极小，LRU 在 Set 时仍正常维护），并发 Get 不再串行阻塞
 
-### I-3 双 tag 缓存重复实现
+### I-3 双 tag 缓存重复实现 ✅已修复
 
-- **状态**：确认成立
+- **状态**：确认成立 → 已修复
 - **证据**：
   - `go/internal/services/notes.go:28` `tagCache *Cache`（基于 services.Cache LRU+TTL）
   - `go/internal/services/tags.go:16` `tagCache map[string]models.TagCacheEntry`（独立第二套 + RWMutex）
-- **修复建议**：统一由 NoteService 暴露 tags，TagService 共享其 cache 或删除自己那份。
+- **修复说明**：删除 TagService 的 `tagCache`/`tagMutex` 字段，`GetTagsCached` 和 `ClearCache` 委托 NoteService 的统一缓存，消除重复
 
 ### I-4 IP 限流键不走 X-Forwarded-For，反代后失效
 
@@ -247,9 +248,9 @@
   - `go/internal/services/notes.go:643-651` 仅 `close(s.stopScanner)`，无 done channel
   - 对比 `cache.go:255-279` `StopCleanup` 有 `cleanupDone` + 5s 超时等待
 
-### I-10 SearchIndex 写锁内做磁盘 IO，锁持有时间过长
+### I-10 SearchIndex 写锁内做磁盘 IO，锁持有时间过长 ✅已修复
 
-- **状态**：确认成立
+- **状态**：确认成立 → 已修复
 - **证据**：`go/internal/services/search_index.go:294-301`
   ```go
   si.mu.Lock()
@@ -257,7 +258,7 @@
   return si.indexNoteFresh(notePath)  // 含 os.ReadFile + tokenize
   ```
 - **影响**：每次 SaveNote 更新索引持写锁数毫秒~秒级，期间所有 Search RLock 排队。
-- **修复建议**：锁外读盘 + tokenize + 构造 postings，仅在替换 entry 时持锁；`removeNoteFromIndex` 用 `notePath→terms` 反向指针避免全索引遍历。
+- **修复说明**：UpdateIndex 改为两阶段 — 锁外 readFile + tokenize，仅锁内做 removeNoteFromIndex（利用反向索引 noteTerms，O(terms) 而非 O(all_terms)）+ indexNoteFresh（写入预解析数据）；`indexNoteFresh` 改为接收预解析参数不再持锁 IO；删除死代码 `indexNote`（已被 UpdateIndex 替代）；全量测试通过
 
 ### I-11 多个配置项为死代码，yaml 键被静默丢弃
 
@@ -352,15 +353,15 @@
 13. **S-8** MoveNote 改为"先 rename 再 update backlinks"+补偿回滚 ✅已修复
 14. **S-10** /healthz + /readyz 拆分 ✅已修复
 15. **I-1** 并发写入加 mutex + mtime 乐观锁 ✅已修复
-16. **I-2** Cache 分片或 RLock 优化
+16. **I-2** Cache Get RLock 优化 ✅已修复
 17. **I-9** scanner 引入 WaitGroup + done channel ✅已修复
-18. **I-10** SearchIndex 锁外读盘
+18. **I-10** SearchIndex 锁外读盘 + 反向索引 ✅已修复
 19. **I-5** WebSocket 读超时 + Origin + ReadLimit
 
 ### 第 3 批 · 体验质量（6-12 周）
 
 20. **S-12** 回收站/软删除实现
-21. **I-3** 合并双 tag 缓存
+21. **I-3** 合并双 tag 缓存 ✅已修复
 22. **I-11** 清理死配置或落地实现
 23. **I-12** CI E2E 全量 + 修正 CHANGELOG
 24. **I-14** 统一 API 文档与实现

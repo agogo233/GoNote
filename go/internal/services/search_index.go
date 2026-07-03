@@ -28,6 +28,7 @@ type SearchIndex struct {
 	index         map[string]*list.List // term -> list of IndexEntry
 	titleIndex    map[string]*list.List // term -> list of TitleEntry (title-only index)
 	titleMap      map[string]string     // notePath -> title (for title lookup)
+	noteTerms     map[string]map[string]bool // reverse index: notePath -> set of terms (for fast removal, I-10)
 	notesDir      string
 	cache         *Cache
 	noteService   *NoteService   // Shared NoteService for reusing cache
@@ -62,6 +63,7 @@ func NewSearchIndex(notesDir string, noteService *NoteService) *SearchIndex {
 		index:         make(map[string]*list.List),
 		titleIndex:    make(map[string]*list.List),
 		titleMap:      make(map[string]string),
+		noteTerms:     make(map[string]map[string]bool),
 		notesDir:      notesDir,
 		cache:         NewCache(10000, 15*time.Minute), // Cache index entries for 15 minutes
 		noteService:   noteService,
@@ -76,6 +78,7 @@ func (si *SearchIndex) BuildIndex() error {
 	newIndex := make(map[string]*list.List)
 	newTitleIndex := make(map[string]*list.List)
 	newTitleMap := make(map[string]string)
+	newNoteTerms := make(map[string]map[string]bool)
 
 	// Use shared NoteService to leverage its cache
 	if si.noteService == nil {
@@ -88,7 +91,7 @@ func (si *SearchIndex) BuildIndex() error {
 
 	// Index each note into the new index
 	for _, note := range notes {
-		if err := si.indexNoteTo(note.Path, newIndex, newTitleIndex, newTitleMap); err != nil {
+		if err := si.indexNoteTo(note.Path, newIndex, newTitleIndex, newTitleMap, newNoteTerms); err != nil {
 			logger.Printf("Error indexing note %s: %v", note.Path, err)
 			continue
 		}
@@ -99,6 +102,7 @@ func (si *SearchIndex) BuildIndex() error {
 	si.index = newIndex
 	si.titleIndex = newTitleIndex
 	si.titleMap = newTitleMap
+	si.noteTerms = newNoteTerms
 	si.termsSortedDirty.Store(true)
 	si.titleSortedDirty.Store(true)
 	si.mu.Unlock()
@@ -144,7 +148,8 @@ func (si *SearchIndex) prepareSortedTerms() {
 }
 
 // indexNoteTo indexes a single note into the provided index map
-func (si *SearchIndex) indexNoteTo(notePath string, index map[string]*list.List, titleIndex map[string]*list.List, titleMap map[string]string) error {
+// noteTerms is populated with a reverse index for fast removal (I-10).
+func (si *SearchIndex) indexNoteTo(notePath string, index map[string]*list.List, titleIndex map[string]*list.List, titleMap map[string]string, noteTerms map[string]map[string]bool) error {
 	fullPath := filepath.Join(si.notesDir, notePath)
 	content, err := readFileContent(fullPath)
 	if err != nil {
@@ -158,6 +163,9 @@ func (si *SearchIndex) indexNoteTo(notePath string, index map[string]*list.List,
 	// Tokenize content for full-text index
 	terms := tokenize(content)
 
+	// Build reverse index: track all terms that reference this notePath
+	termSet := make(map[string]bool)
+
 	// Add each term to full-text index
 	for pos, term := range terms {
 		if _, ok := index[term]; !ok {
@@ -167,6 +175,7 @@ func (si *SearchIndex) indexNoteTo(notePath string, index map[string]*list.List,
 			NotePath: notePath,
 			Position: pos,
 		})
+		termSet[term] = true
 	}
 
 	// Tokenize title for title index
@@ -180,6 +189,7 @@ func (si *SearchIndex) indexNoteTo(notePath string, index map[string]*list.List,
 			Title:    title,
 			Score:    0, // score calculated at query time
 		})
+		termSet[term] = true
 	}
 
 	// 同时索引文件名（笔记名称）用于标题搜索
@@ -194,6 +204,11 @@ func (si *SearchIndex) indexNoteTo(notePath string, index map[string]*list.List,
 			Title:    title,
 			Score:    0,
 		})
+		termSet[term] = true
+	}
+
+	if len(termSet) > 0 {
+		noteTerms[notePath] = termSet
 	}
 
 	return nil
@@ -201,107 +216,16 @@ func (si *SearchIndex) indexNoteTo(notePath string, index map[string]*list.List,
 
 // indexNote indexes a single note into the main index (must hold lock)
 // This version removes old entries first, then re-indexes.
-func (si *SearchIndex) indexNote(notePath string) error {
-	fullPath := filepath.Join(si.notesDir, notePath)
-	content, err := readFileContent(fullPath)
-	if err != nil {
-		return err
-	}
-
-	// Extract and store title
-	title := extractTitle(content, notePath)
-	si.titleMap[notePath] = title
-
-	// Remove old title entries from titleIndex
-	for term, entries := range si.titleIndex {
-		for e := entries.Front(); e != nil; {
-			next := e.Next()
-			entry := e.Value.(TitleEntry)
-			if entry.NotePath == notePath {
-				entries.Remove(e)
-			}
-			e = next
-		}
-		if entries.Len() == 0 {
-			delete(si.titleIndex, term)
-		}
-	}
-
-	// Tokenize content for full-text index
-	terms := tokenize(content)
-
-	// Remove old content entries from index
-	for term, entries := range si.index {
-		for e := entries.Front(); e != nil; {
-			next := e.Next()
-			entry := e.Value.(IndexEntry)
-			if entry.NotePath == notePath {
-				entries.Remove(e)
-			}
-			e = next
-		}
-		if entries.Len() == 0 {
-			delete(si.index, term)
-		}
-	}
-
-	// Add each term to full-text index
-	for pos, term := range terms {
-		if _, ok := si.index[term]; !ok {
-			si.index[term] = list.New()
-		}
-		si.index[term].PushBack(IndexEntry{
-			NotePath: notePath,
-			Position: pos,
-		})
-	}
-
-	// Tokenize title for title index
-	titleTerms := tokenize(title)
-	for _, term := range titleTerms {
-		if _, ok := si.titleIndex[term]; !ok {
-			si.titleIndex[term] = list.New()
-		}
-		si.titleIndex[term].PushBack(TitleEntry{
-			NotePath: notePath,
-			Title:    title,
-			Score:    0,
-		})
-	}
-
-	// 同时索引文件名（笔记名称）
-	fileName := extractFileName(notePath)
-	fileNameTerms := tokenize(fileName)
-	for _, term := range fileNameTerms {
-		if _, ok := si.titleIndex[term]; !ok {
-			si.titleIndex[term] = list.New()
-		}
-		si.titleIndex[term].PushBack(TitleEntry{
-			NotePath: notePath,
-			Title:    title,
-			Score:    0,
-		})
-	}
-
-	si.termsSortedDirty.Store(true)
-	si.titleSortedDirty.Store(true)
-	return nil
-}
 
 // indexNoteFresh indexes a single note WITHOUT removing old entries first.
 // Use this when the caller has already removed old entries (e.g. UpdateIndex).
 // Must hold the write lock when calling.
-func (si *SearchIndex) indexNoteFresh(notePath string) error {
-	fullPath := filepath.Join(si.notesDir, notePath)
-	content, err := readFileContent(fullPath)
-	if err != nil {
-		return err
-	}
-
-	title := extractTitle(content, notePath)
+// Populates the reverse index (noteTerms) for fast future removal (I-10).
+func (si *SearchIndex) indexNoteFresh(notePath string, terms []string, titleTerms []string, fileNameTerms []string, title string) {
 	si.titleMap[notePath] = title
 
-	terms := tokenize(content)
+	termSet := make(map[string]bool)
+
 	for pos, term := range terms {
 		if _, ok := si.index[term]; !ok {
 			si.index[term] = list.New()
@@ -310,9 +234,9 @@ func (si *SearchIndex) indexNoteFresh(notePath string) error {
 			NotePath: notePath,
 			Position: pos,
 		})
+		termSet[term] = true
 	}
 
-	titleTerms := tokenize(title)
 	for _, term := range titleTerms {
 		if _, ok := si.titleIndex[term]; !ok {
 			si.titleIndex[term] = list.New()
@@ -322,10 +246,9 @@ func (si *SearchIndex) indexNoteFresh(notePath string) error {
 			Title:    title,
 			Score:    0,
 		})
+		termSet[term] = true
 	}
 
-	fileName := extractFileName(notePath)
-	fileNameTerms := tokenize(fileName)
 	for _, term := range fileNameTerms {
 		if _, ok := si.titleIndex[term]; !ok {
 			si.titleIndex[term] = list.New()
@@ -335,22 +258,36 @@ func (si *SearchIndex) indexNoteFresh(notePath string) error {
 			Title:    title,
 			Score:    0,
 		})
+		termSet[term] = true
 	}
 
+	si.noteTerms[notePath] = termSet
 	si.termsSortedDirty.Store(true)
 	si.titleSortedDirty.Store(true)
-	return nil
 }
 
 // UpdateIndex updates the index for a single note (incremental)
-// Calls removeNoteFromIndex first, then indexNoteFresh (which skips the redundant removal).
+// Phase 1: read disk + tokenize OUTSIDE lock to minimize lock hold time (I-10)
+// Phase 2: brief write lock to remove old entries (via reverse index) + add new entries
 func (si *SearchIndex) UpdateIndex(notePath string) error {
+	fullPath := filepath.Join(si.notesDir, notePath)
+	content, err := readFileContent(fullPath)
+	if err != nil {
+		return err
+	}
+
+	title := extractTitle(content, notePath)
+	terms := tokenize(content)
+	titleTerms := tokenize(title)
+	fileName := extractFileName(notePath)
+	fileNameTerms := tokenize(fileName)
+
 	si.mu.Lock()
 	defer si.mu.Unlock()
 
 	si.removeNoteFromIndex(notePath)
-
-	return si.indexNoteFresh(notePath)
+	si.indexNoteFresh(notePath, terms, titleTerms, fileNameTerms, title)
+	return nil
 }
 
 // RemoveFromIndex removes a note from the index
@@ -362,7 +299,54 @@ func (si *SearchIndex) RemoveFromIndex(notePath string) {
 }
 
 // removeNoteFromIndex removes all entries for a note (must hold lock)
+// Uses reverse index for O(terms) instead of O(all terms) removal (I-10).
 func (si *SearchIndex) removeNoteFromIndex(notePath string) {
+	terms, ok := si.noteTerms[notePath]
+	if !ok {
+		// Fallback: full scan for safety (should not happen with normal usage)
+		si.removeNoteFromIndexFullScan(notePath)
+		return
+	}
+
+	for term := range terms {
+		// Remove from full-text index
+		if entries, ok := si.index[term]; ok {
+			for e := entries.Front(); e != nil; {
+				next := e.Next()
+				if e.Value.(IndexEntry).NotePath == notePath {
+					entries.Remove(e)
+				}
+				e = next
+			}
+			if entries.Len() == 0 {
+				delete(si.index, term)
+			}
+		}
+
+		// Remove from title index
+		if entries, ok := si.titleIndex[term]; ok {
+			for e := entries.Front(); e != nil; {
+				next := e.Next()
+				if e.Value.(TitleEntry).NotePath == notePath {
+					entries.Remove(e)
+				}
+				e = next
+			}
+			if entries.Len() == 0 {
+				delete(si.titleIndex, term)
+			}
+		}
+	}
+
+	delete(si.titleMap, notePath)
+	delete(si.noteTerms, notePath)
+	si.termsSortedDirty.Store(true)
+	si.titleSortedDirty.Store(true)
+}
+
+// removeNoteFromIndexFullScan removes entries by scanning all terms.
+// Used as fallback when reverse index is unavailable.
+func (si *SearchIndex) removeNoteFromIndexFullScan(notePath string) {
 	for term, entries := range si.index {
 		for e := entries.Front(); e != nil; {
 			next := e.Next()
@@ -394,6 +378,7 @@ func (si *SearchIndex) removeNoteFromIndex(notePath string) {
 	}
 
 	delete(si.titleMap, notePath)
+	delete(si.noteTerms, notePath)
 	si.termsSortedDirty.Store(true)
 	si.titleSortedDirty.Store(true)
 }

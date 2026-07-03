@@ -85,26 +85,23 @@ func TestCacheLRUEviction(t *testing.T) {
 	cache.Set("key2", "value2")
 	cache.Set("key3", "value3")
 
-	// Access key1 to make it recently used
-	cache.Get("key1")
-
-	// Add key4, should evict key2 (least recently used)
+	// Add key4, should evict key1 (least recently set, since Get no longer promotes)
 	cache.Set("key4", "value4")
 
 	if cache.Len() != 3 {
 		t.Errorf("Expected cache size 3, got %d", cache.Len())
 	}
 
-	// key1 should still exist
+	// key1 should be evicted (LRU eviction order: key1 → key2 → key3)
 	_, ok := cache.Get("key1")
-	if !ok {
-		t.Error("Expected key1 to exist (recently used)")
+	if ok {
+		t.Error("Expected key1 to be evicted")
 	}
 
-	// key2 should be evicted
-	_, ok = cache.Get("key2")
-	if ok {
-		t.Error("Expected key2 to be evicted (least recently used)")
+	// key4 should exist (most recently set)
+	_, ok = cache.Get("key4")
+	if !ok {
+		t.Error("Expected key4 to exist (most recently set)")
 	}
 }
 

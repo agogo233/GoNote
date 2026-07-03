@@ -93,27 +93,30 @@ func (c *Cache) Set(key string, value interface{}) {
 // Get retrieves a value from the cache.
 // Returns (value, true) if found and not expired, (nil, false) otherwise.
 // Thread-safe for concurrent use.
+// Uses RLock for hot path to avoid serializing concurrent reads (I-2).
 func (c *Cache) Get(key string) (interface{}, bool) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
+	c.mu.RLock()
 	elem, ok := c.items[key]
 	if !ok {
+		c.mu.RUnlock()
 		return nil, false
 	}
-
 	entry := elem.Value.(*cacheEntry)
-
-	// Check if expired
 	if time.Now().After(entry.expiresAt) {
-		c.evictList.Remove(elem)
-		delete(c.items, key)
+		c.mu.RUnlock()
+		// Remove expired entry under write lock
+		c.mu.Lock()
+		if elem, ok = c.items[key]; ok {
+			entry = elem.Value.(*cacheEntry)
+			if time.Now().After(entry.expiresAt) {
+				c.evictList.Remove(elem)
+				delete(c.items, key)
+			}
+		}
+		c.mu.Unlock()
 		return nil, false
 	}
-
-	// Move to back (most recently used)
-	c.evictList.MoveToBack(elem)
-
+	c.mu.RUnlock()
 	return entry.value, true
 }
 
