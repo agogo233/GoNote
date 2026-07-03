@@ -12,7 +12,7 @@
 > 已修复（commit 3df026c）：I-9（scannerDone 超时等待）、S-10（/healthz + /readyz 拆分，notes_dir/scanner/search index 三项检查）— 编译零错误，全量测试通过
 > 已修复（commit 2f2dd77）：I-2（Cache.Get RLock 优化）、I-3（合并双 tag 缓存）、I-10（反向索引 + 锁外读盘）— 编译零错误，全量测试通过
 > 已修复（commit 75ce890）：I-4（Fiber ProxyHeader 使 c.IP() 支持 X-Forwarded-For）、I-5（WebSocket Origin 校验 + ReadLimit/ReadDeadline + 连接上限）— 编译零错误，811 测试全量通过
-> 已修复（commit 待补）：S-2（EndpointLimiter 与全局开关解耦）、S-3（共享页 title EscapeString + DOMPurify 清洗 marked 输出）— 编译零错误，811 测试全量通过
+> 已修复（commit fb0f1f4）：S-2（EndpointLimiter 与全局开关解耦）、S-3（共享页 title EscapeString + DOMPurify 清洗 marked 输出）— 编译零错误，811 测试全量通过
 > 待修复：S-1, S-11, S-12, I-11~I-14, I-16, W-1~W-12
 
 ## 复核结果总览
