@@ -343,7 +343,7 @@ func (s *BacklinkService) UpdateFolderBacklinks(oldFolderPath, newFolderPath str
 // replaceFolderWikilinks replaces wikilinks pointing to notes in old folder to new folder
 func (s *BacklinkService) replaceFolderWikilinks(content, oldFolder, newFolder string) string {
 	// Pattern to match wikilinks that might reference the old folder
-	wikilinkPattern := regexp.MustCompile(`\[\[([^\]|]+)(\|[^\]]+)?\]\]`)
+	wikilinkPattern := backlinkWikilinkRegex
 
 	result := wikilinkPattern.ReplaceAllStringFunc(content, func(match string) string {
 		// Extract the link target

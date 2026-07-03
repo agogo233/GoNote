@@ -132,30 +132,61 @@ func Load(configPath string) (*Config, error) {
 	return cfg, nil
 }
 
-// applyDefaults sets default values for optional config fields
+// applyDefaults sets default values for optional config fields.
+// Called after YAML load and before env overrides.
+// These defaults are purely defensive — config.yaml 中已显式设置的值不会被覆盖
+// (零值检测: 0/""/false/nil 才会触发默认值)。
 func applyDefaults(cfg *Config) {
-	// Log defaults
-	// Note: if cfg.Log.Enabled is false (zero value), we keep it false
-	// Only explicit true in config.yaml will enable logging
+	// 日志默认关闭（注释保留：设计意图——不允许 true 走默认值，零值即关闭）
 
-	// Upload defaults
-	if cfg.Upload.MaxFileSizeMB == 0 {
-		cfg.Upload.MaxFileSizeMB = 50 // 50MB default
+	// 服务器默认值
+	if cfg.Server.Port == 0 {
+		cfg.Server.Port = 9000
 	}
-	if cfg.Upload.MaxBodySizeMB == 0 {
-		cfg.Upload.MaxBodySizeMB = 100 // 100MB default
-	}
-	// Cache scan interval default
-	if cfg.Cache.ScanInterval == 0 {
-		cfg.Cache.ScanInterval = 30 // 30 seconds default
-	}
-
-	// Server defaults
 	if len(cfg.Server.AllowedOrigins) == 0 {
 		cfg.Server.AllowedOrigins = []string{"*"} // Allow all origins by default
 	}
 	if cfg.Server.WSMaxConnections == 0 {
 		cfg.Server.WSMaxConnections = 100 // Default max 100 concurrent WS connections
+	}
+
+	// 存储默认值
+	if cfg.Storage.NotesDir == "" {
+		cfg.Storage.NotesDir = "./data/notes"
+	}
+
+	// 认证默认值
+	// session_max_age=0 会导致会话立即过期，必须给一个值
+	if cfg.Authentication.SessionMaxAge == 0 {
+		cfg.Authentication.SessionMaxAge = 86400 // 24 hours default
+	}
+
+	// 缓存默认值
+	if cfg.Cache.TTL == 0 {
+		cfg.Cache.TTL = 60 // 60 seconds default
+	}
+	if cfg.Cache.Capacity == 0 {
+		cfg.Cache.Capacity = 1000 // 1000 items default
+	}
+	if cfg.Cache.ScanInterval == 0 {
+		cfg.Cache.ScanInterval = 30 // 30 seconds default
+	}
+
+	// 限流默认值
+	// 当 RateLimit.Enabled=true 但 max/window 未设置时——零值会导致拒绝所有请求或除零
+	if cfg.RateLimit.MaxRequests == 0 {
+		cfg.RateLimit.MaxRequests = 100 // 100 requests per window
+	}
+	if cfg.RateLimit.WindowSeconds == 0 {
+		cfg.RateLimit.WindowSeconds = 60 // 60 seconds window
+	}
+
+	// 上传默认值
+	if cfg.Upload.MaxFileSizeMB == 0 {
+		cfg.Upload.MaxFileSizeMB = 50 // 50MB default
+	}
+	if cfg.Upload.MaxBodySizeMB == 0 {
+		cfg.Upload.MaxBodySizeMB = 100 // 100MB default
 	}
 }
 

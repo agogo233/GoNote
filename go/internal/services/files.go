@@ -8,6 +8,12 @@ import (
 	"strings"
 )
 
+// 文件名清理用预编译正则
+var (
+	reFilenameDangerous = regexp.MustCompile(`[\\/:*?"<>|\x00-\x1f]`)
+	reFilenameUnderscore = regexp.MustCompile(`_+`)
+)
+
 // ValidatePathSecurity ensures a path is within the notes directory
 func ValidatePathSecurity(notesDir, targetPath string) bool {
 	absNotesDir, err := filepath.Abs(notesDir)
@@ -98,12 +104,10 @@ func SanitizeFilename(filename string) string {
 	}
 
 	// Remove dangerous characters: \ / : * ? " < > | and control chars
-	re := regexp.MustCompile(`[\\/:*?"<>|\x00-\x1f]`)
-	name = re.ReplaceAllString(name, "_")
+	name = reFilenameDangerous.ReplaceAllString(name, "_")
 
 	// Collapse multiple underscores
-	reMultiple := regexp.MustCompile(`_+`)
-	name = reMultiple.ReplaceAllString(name, "_")
+	name = reFilenameUnderscore.ReplaceAllString(name, "_")
 
 	// Strip leading/trailing underscores and spaces
 	name = strings.Trim(name, "_ ")

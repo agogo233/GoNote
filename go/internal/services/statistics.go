@@ -7,6 +7,27 @@ import (
 	"strings"
 )
 
+// 统计用预编译正则（避免热路径每次调用重新编译）
+var (
+	reStatWords         = regexp.MustCompile(`\S+`)
+	reStatSentences     = regexp.MustCompile(`[.!?]+(?:\s|$)`)
+	reStatListItem      = regexp.MustCompile(`(?m)^\s*(?:[-*+]|\d+\.)\s+(?:\[[ xX]\]\s+)?(.+)$`)
+	reStatTaskList      = regexp.MustCompile(`(?m)^\s*(?:[-*+]|\d+\.)\s+\[[ xX]\]`)
+	reStatTables        = regexp.MustCompile(`^\s*\|(?:\s*:?-+:?\s*\|){1,}\s*$`)
+	reStatMdLinks       = regexp.MustCompile(`\[([^\]]+)\]\(([^\)]+)\)`)
+	reStatMdInternal    = regexp.MustCompile(`\[([^\]]+)\]\(([^\)]+\.md)\)`)
+	reStatWikilinks     = regexp.MustCompile(`\[\[([^\]|]+)(?:\|[^\]]+)?\]\]`)
+	reStatCodeBlocks    = regexp.MustCompile("```[\\s\\S]*?```")
+	reStatInlineCode    = regexp.MustCompile("`[^`]+`")
+	reStatH1            = regexp.MustCompile(`(?m)^# `)
+	reStatH2            = regexp.MustCompile(`(?m)^## `)
+	reStatH3            = regexp.MustCompile(`(?m)^### `)
+	reStatAllTasks      = regexp.MustCompile(`- \[[ x]\]`)
+	reStatDoneTasks     = regexp.MustCompile(`(?i)- \[x\]`)
+	reStatImages        = regexp.MustCompile(`!\[([^\]]*)\]\(([^\)]+)\)`)
+	reStatBlockquotes   = regexp.MustCompile(`^> `)
+)
+
 // NoteStatistics contains comprehensive statistics about a note
 type NoteStatistics struct {
 	Words            int            `json:"words"`              // Word count
@@ -81,7 +102,7 @@ func (s *StatisticsService) CalculateStatisticsFromContent(content string) *Note
 	stats.Characters = len(charsNoSpace)
 
 	// Word count (split by whitespace and filter empty)
-	words := regexp.MustCompile(`\S+`).FindAllString(content, -1)
+	words := reStatWords.FindAllString(content, -1)
 	stats.Words = len(words)
 
 	// Reading time (average 200 words per minute, minimum 1 minute)
@@ -104,36 +125,34 @@ func (s *StatisticsService) CalculateStatisticsFromContent(content string) *Note
 	stats.Paragraphs = paragraphCount
 
 	// Sentence count: punctuation [.!?]+ followed by space or end-of-string
-	sentences := regexp.MustCompile(`[.!?]+(?:\s|$)`).FindAllString(content, -1)
+	sentences := reStatSentences.FindAllString(content, -1)
 	stats.Sentences = len(sentences)
 
 	// List items: lines starting with -, *, + or a number (e.g. 1., 10.), excluding tasks [-]
 	// Note: Using (?!) negative lookahead is not supported in Go regexp
 	// Instead, match list items and filter out task lists in a separate pass
-	listItemRegex := regexp.MustCompile(`(?m)^\s*(?:[-*+]|\d+\.)\s+(?:\[[ xX]\]\s+)?(.+)$`)
-	matches := listItemRegex.FindAllStringSubmatch(content, -1)
+	matches := reStatListItem.FindAllStringSubmatch(content, -1)
 	// Count only non-task list items (task lists have [ ] or [x] pattern)
-	taskListRegex := regexp.MustCompile(`(?m)^\s*(?:[-*+]|\d+\.)\s+\[[ xX]\]`)
 	for _, match := range matches {
 		line := match[0]
-		if !taskListRegex.MatchString(line) {
+		if !reStatTaskList.MatchString(line) {
 			stats.ListItems++
 		}
 	}
 
 	// Tables: count markdown table separator rows (| --- | --- |)
-	tables := regexp.MustCompile(`^\s*\|(?:\s*:?-+:?\s*\|){1,}\s*$`).FindAllString(content, -1)
+	tables := reStatTables.FindAllString(content, -1)
 	stats.Tables = len(tables)
 
 	// Markdown link count (standard [text](url) format)
-	markdownLinks := regexp.MustCompile(`\[([^\]]+)\]\(([^\)]+)\)`).FindAllString(content, -1)
+	markdownLinks := reStatMdLinks.FindAllString(content, -1)
 	stats.Links = len(markdownLinks)
 
 	// Internal link count (standard markdown links to .md files)
-	markdownInternalLinks := regexp.MustCompile(`\[([^\]]+)\]\(([^\)]+\.md)\)`).FindAllString(content, -1)
+	markdownInternalLinks := reStatMdInternal.FindAllString(content, -1)
 
 	// Wikilink count ([[note]] or [[note|display text]] format - Obsidian style)
-	wikilinks := regexp.MustCompile(`\[\[([^\]|]+)(?:\|[^\]]+)?\]\]`).FindAllString(content, -1)
+	wikilinks := reStatWikilinks.FindAllString(content, -1)
 	stats.Wikilinks = len(wikilinks)
 
 	// Total links and internal links
@@ -141,31 +160,31 @@ func (s *StatisticsService) CalculateStatisticsFromContent(content string) *Note
 	stats.ExternalLinks = stats.Links - len(markdownInternalLinks)
 
 	// Code block count
-	codeBlocks := regexp.MustCompile("```[\\s\\S]*?```").FindAllString(content, -1)
+	codeBlocks := reStatCodeBlocks.FindAllString(content, -1)
 	stats.CodeBlocks = len(codeBlocks)
 
 	// Inline code count
-	inlineCode := regexp.MustCompile("`[^`]+`").FindAllString(content, -1)
+	inlineCode := reStatInlineCode.FindAllString(content, -1)
 	stats.InlineCode = len(inlineCode)
 
 	// Heading count by level (using multiline mode with (?m))
-	stats.Headings.H1 = len(regexp.MustCompile(`(?m)^# `).FindAllString(content, -1))
-	stats.Headings.H2 = len(regexp.MustCompile(`(?m)^## `).FindAllString(content, -1))
-	stats.Headings.H3 = len(regexp.MustCompile(`(?m)^### `).FindAllString(content, -1))
+	stats.Headings.H1 = len(reStatH1.FindAllString(content, -1))
+	stats.Headings.H2 = len(reStatH2.FindAllString(content, -1))
+	stats.Headings.H3 = len(reStatH3.FindAllString(content, -1))
 
 	// Task count (checkboxes)
-	totalTasks := len(regexp.MustCompile(`- \[[ x]\]`).FindAllString(content, -1))
-	completedTasks := len(regexp.MustCompile(`(?i)- \[x\]`).FindAllString(content, -1))
+	totalTasks := len(reStatAllTasks.FindAllString(content, -1))
+	completedTasks := len(reStatDoneTasks.FindAllString(content, -1))
 	stats.Tasks.Total = totalTasks
 	stats.Tasks.Completed = completedTasks
 	stats.Tasks.Pending = totalTasks - completedTasks
 
 	// Image count
-	images := regexp.MustCompile(`!\[([^\]]*)\]\(([^\)]+)\)`).FindAllString(content, -1)
+	images := reStatImages.FindAllString(content, -1)
 	stats.Images = len(images)
 
 	// Blockquote count
-	blockquotes := regexp.MustCompile(`^> `).FindAllString(content, -1)
+	blockquotes := reStatBlockquotes.FindAllString(content, -1)
 	stats.Blockquotes = len(blockquotes)
 
 	return stats

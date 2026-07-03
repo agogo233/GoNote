@@ -18,6 +18,9 @@ import (
 
 var ErrConflict = errors.New("note conflict: modified by another source")
 
+// 笔记附件用预编译正则：匹配媒体嵌入 wikilink ![[file|alt]]
+var noteAttachmentMediaRegex = regexp.MustCompile(`!\[\[([^\]|]+)(?:\|[^\]]+)?\]\]`)
+
 // Cache key prefixes for fine-grained invalidation
 const (
 	cachePrefixNotesList  = "notes:list"   // Note list cache
@@ -245,6 +248,102 @@ func (s *NoteService) doScan(includeMedia bool) ([]models.Note, []string) {
 	return notes, folders
 }
 
+// doScanBoth 在一次 WalkDir 内同时返回含媒体与不含媒体的笔记列表，避免重复遍历。
+// noteOnly（仅 markdown）是 allNotes（含媒体）的子集，复用同一份 folder 集合。
+func (s *NoteService) doScanBoth() (allNotes, notesOnly []models.Note, folders []string) {
+	foldersSet := make(map[string]bool)
+	var walkErrors []string
+
+	filepath.WalkDir(s.notesDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			walkErrors = append(walkErrors, fmt.Sprintf("WalkDir error at %s: %v", path, err))
+			return nil
+		}
+
+		if d.IsDir() && strings.HasPrefix(d.Name(), ".") {
+			return fs.SkipDir
+		}
+		if strings.HasPrefix(d.Name(), ".") {
+			return nil
+		}
+
+		relPath, err := filepath.Rel(s.notesDir, path)
+		if err != nil {
+			return nil
+		}
+
+		if d.IsDir() {
+			if relPath != "." {
+				foldersSet[ToPosixPath(relPath)] = true
+			}
+			return nil
+		}
+
+		ext := strings.ToLower(filepath.Ext(path))
+		isMarkdown := ext == ".md"
+		mediaType := GetMediaType(d.Name())
+		if !isMarkdown && mediaType == "" {
+			return nil
+		}
+
+		info, err := d.Info()
+		if err != nil {
+			return nil
+		}
+
+		folder := ToPosixPath(filepath.Dir(relPath))
+		if folder == "." {
+			folder = ""
+		}
+
+		var tags []string
+		if isMarkdown {
+			tags = s.GetTagsCached(path)
+		}
+
+		noteType := "note"
+		if mediaType != "" {
+			noteType = mediaType
+		}
+
+		note := models.Note{
+			Name:     strings.TrimSuffix(d.Name(), filepath.Ext(d.Name())),
+			Path:     ToPosixPath(relPath),
+			Folder:   folder,
+			Modified: info.ModTime().UTC().Format(time.RFC3339),
+			Size:     info.Size(),
+			Type:     noteType,
+			Tags:     tags,
+		}
+		allNotes = append(allNotes, note)
+		if isMarkdown {
+			notesOnly = append(notesOnly, note)
+		}
+		return nil
+	})
+
+	if len(walkErrors) > 0 {
+		for _, errMsg := range walkErrors[:min(len(walkErrors), 10)] {
+			fmt.Printf("Warning: %s\n", errMsg)
+		}
+		if len(walkErrors) > 10 {
+			fmt.Printf("Warning: ... and %d more walk errors\n", len(walkErrors)-10)
+		}
+	}
+
+	sortLess := func(a, b models.Note) bool { return a.Modified > b.Modified }
+	sort.Slice(allNotes, func(i, j int) bool { return sortLess(allNotes[i], allNotes[j]) })
+	sort.Slice(notesOnly, func(i, j int) bool { return sortLess(notesOnly[i], notesOnly[j]) })
+
+	folders = make([]string, 0, len(foldersSet))
+	for f := range foldersSet {
+		folders = append(folders, f)
+	}
+	sort.Strings(folders)
+
+	return allNotes, notesOnly, folders
+}
+
 // directScan performs a direct scan without using cache (fallback)
 func (s *NoteService) directScan(includeMedia bool) ([]models.Note, []string, error) {
 	notes, folders := s.doScan(includeMedia)
@@ -256,15 +355,15 @@ func (s *NoteService) directScan(includeMedia bool) ([]models.Note, []string, er
 	return notes, folders, nil
 }
 
-// GetNoteContent returns the content of a note
+// GetNoteContent returns the content of a note.
+// 使用 cache 缓存笔记内容；通过 mtime 校验保证外部绕过 API 写盘时也能拿到最新内容。
+// 调用方：handlers/note.go（编辑器）、handlers/share.go（共享）、search_index.go（搜索结果高亮）
 func (s *NoteService) GetNoteContent(notePath string) (string, error) {
-	fullPath := filepath.Join(s.notesDir, notePath)
-
-	// Security check
 	if !ValidatePathSecurity(s.notesDir, notePath) {
 		return "", fmt.Errorf("invalid path")
 	}
 
+	fullPath := filepath.Join(s.notesDir, notePath)
 	content, err := os.ReadFile(fullPath)
 	if err != nil {
 		return "", err
@@ -459,8 +558,7 @@ func (s *NoteService) GetAttachments(notePath string) ([]models.Attachment, erro
 
 	// Extract media references from content: ![[filename]] or ![[filename|alt text]]
 	// This regex matches the wikilink format for embedded media
-	mediaRefRegex := regexp.MustCompile(`!\[\[([^\]|]+)(?:\|[^\]]+)?\]\]`)
-	matches := mediaRefRegex.FindAllStringSubmatch(content, -1)
+	matches := noteAttachmentMediaRegex.FindAllStringSubmatch(content, -1)
 
 	// Build a set of referenced media filenames
 	referencedMedia := make(map[string]bool)
@@ -742,14 +840,15 @@ func (s *NoteService) IsScannerReady() bool {
 
 // performScan executes the actual scan and updates cache
 func (s *NoteService) performScan() {
-	// Scan both with and without media to populate both cache entries
-	s.scanAndUpdate(true) // Include media
-	notes := s.scanAndUpdate(false) // Exclude media（仅含 markdown）
+	// 单次 WalkDir 同时获取含媒体与不含媒体的两份笔记列表，避免重复遍历
+	allNotes, notesOnly, folders := s.doScanBoth()
 
-	// 增量同步搜索索引：将扫描得到的 markdown 笔记集合与上次 snapshot 对比，
-	// 对新增/变更调 UpdateIndex，对消失调 RemoveFromIndex。
-	// 复用 scanAndUpdate 已读的 notes 列表，避免二次 stat。
-	s.syncSearchIndex(notes)
+	// 写两份缓存条目
+	s.cache.Set(fmt.Sprintf("%s:%v", cachePrefixNotesList, true), &scanCacheEntry{Notes: allNotes, Folders: folders})
+	s.cache.Set(fmt.Sprintf("%s:%v", cachePrefixNotesList, false), &scanCacheEntry{Notes: notesOnly, Folders: folders})
+
+	// 增量同步搜索索引：基于 markdown 笔记列表做差分
+	s.syncSearchIndex(notesOnly)
 
 	if s.onScanComplete != nil {
 		s.onScanComplete()

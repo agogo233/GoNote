@@ -82,7 +82,7 @@ To link to a heading, convert the heading text to a slug: **lowercase, spaces �
 ## 🎨 Customization
 
 ### Themes
-- **8 built-in themes** - Light, Dark, Dracula, Nord, Monokai, Vue High Contrast, Cobalt2, VS Blue
+- **16 built-in themes** - Light, Dark, Dracula, Nord, Monokai, Vue High Contrast, Cobalt2, VS Blue, Catppuccin Mocha, Gruvbox Dark, One Dark, One Light, Rose Pine, Solarized Light, Tokyo Night, Matcha Light
 - **Theme persistence** - Remembers your choice
 - **Custom themes** - Create your own CSS themes
 - **Instant switching** - No reload required
@@ -334,7 +334,7 @@ GoNote can be installed as a standalone app on your device:
 
 ## 🌍 Internationalization
 
-- **Multiple languages** - English, Spanish, German, French built-in
+- **Built-in languages** - English (en-US), Simplified Chinese (zh-CN)
 - **Easy to add** - Drop JSON files in `locales/` folder
 - **Instant switch** - Change language in Settings without reload
 - **Community translations** - Contributions welcome!

@@ -10,6 +10,14 @@ import (
 	"strings"
 )
 
+// 导出用预编译正则
+var (
+	// 导出时匹配带可选 alt 的媒体嵌入 wikilink: ![[file.png|alt text]]
+	exportWikilinkMediaRegex = regexp.MustCompile(`!\[\[([^\]|]+)(?:\|([^\]]+))?\]\]`)
+	// 匹配标准 Markdown 图片：![alt](path)
+	exportMarkdownImgRegex = regexp.MustCompile(`!\[([^\]]*)\]\(([^)]+)\)`)
+)
+
 // ExportService handles HTML export operations
 type ExportService struct {
 	notesDir   string
@@ -276,7 +284,7 @@ func (s *ExportService) GenerateExportHTML(title, content, themeCSS string, isDa
 // ProcessMediaForExport processes media references for standalone HTML export
 func (s *ExportService) ProcessMediaForExport(content string, noteFolder, notesDir string) string {
 	// Handle wikilink media: ![[file.png]] or ![[file.mp3|alt text]]
-	wikilinkPattern := regexp.MustCompile(`!\[\[([^\]|]+)(?:\|([^\]]+))?\]\]`)
+	wikilinkPattern := exportWikilinkMediaRegex
 	content = wikilinkPattern.ReplaceAllStringFunc(content, func(match string) string {
 		submatches := wikilinkPattern.FindStringSubmatch(match)
 		mediaName := strings.TrimSpace(submatches[1])
@@ -303,7 +311,7 @@ func (s *ExportService) ProcessMediaForExport(content string, noteFolder, notesD
 	})
 
 	// Handle standard markdown images: ![alt](path)
-	imgPattern := regexp.MustCompile(`!\[([^\]]*)\]\(([^)]+)\)`)
+	imgPattern := exportMarkdownImgRegex
 	content = imgPattern.ReplaceAllStringFunc(content, func(match string) string {
 		submatches := imgPattern.FindStringSubmatch(match)
 		altText := submatches[1]

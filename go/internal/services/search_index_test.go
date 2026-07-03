@@ -146,16 +146,16 @@ func TestSearchIndex_UpdateIndex(t *testing.T) {
 		t.Error("Expected to find 'original'")
 	}
 	
-	// Update the note
+// Update the note
 	if err := os.WriteFile(notePath, []byte("Updated content with newword"), 0644); err != nil {
 		t.Fatalf("Failed to update file: %v", err)
 	}
-	
+
 	// Update index
 	if err := si.UpdateIndex("test.md"); err != nil {
 		t.Fatalf("UpdateIndex failed: %v", err)
 	}
-	
+
 	// Verify new content is indexed
 	results, _ = si.Search("newword")
 	if len(results) == 0 {

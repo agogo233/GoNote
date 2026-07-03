@@ -9,6 +9,14 @@ import (
 	"gonote/internal/models"
 )
 
+// 图谱用预编译正则
+var (
+	// 匹配 wikilink 提取目标：[[note]] 或 [[note|display]]
+	graphWikilinkRegex = regexp.MustCompile(`\[\[([^\]|]+)(?:\|[^\]]+)?\]\]`)
+	// 匹配 Markdown 内部链接：[text](path.md)
+	graphMdLinkRegex = regexp.MustCompile(`\[([^\]]+)\]\(([^)]+\.md)\)`)
+)
+
 // GraphService handles knowledge graph operations
 type GraphService struct {
 	notesDir    string
@@ -75,8 +83,7 @@ func (s *GraphService) extractLinks(content string) []string {
 	seen := make(map[string]bool)
 
 	// Extract wikilinks: [[note]] or [[note|display text]]
-	wikilinkPattern := regexp.MustCompile(`\[\[([^\]|]+)(?:\|[^\]]+)?\]\]`)
-	wikilinkMatches := wikilinkPattern.FindAllStringSubmatch(content, -1)
+	wikilinkMatches := graphWikilinkRegex.FindAllStringSubmatch(content, -1)
 	for _, match := range wikilinkMatches {
 		target := strings.TrimSpace(match[1])
 		// Resolve target to a path
@@ -88,8 +95,7 @@ func (s *GraphService) extractLinks(content string) []string {
 	}
 
 	// Extract markdown links: [text](path.md)
-	mdLinkPattern := regexp.MustCompile(`\[([^\]]+)\]\(([^)]+\.md)\)`)
-	mdLinkMatches := mdLinkPattern.FindAllStringSubmatch(content, -1)
+	mdLinkMatches := graphMdLinkRegex.FindAllStringSubmatch(content, -1)
 	for _, match := range mdLinkMatches {
 		target := strings.TrimSpace(match[2])
 		// Resolve target to a path
