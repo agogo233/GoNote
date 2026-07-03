@@ -36,17 +36,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - Full bilingual support (English/Chinese) for all user-facing documentation
 - Dedicated developer guide section with API documentation and environment variable reference
 - Security hardening guide and authentication setup documentation
-- Extended E2E test coverage for all major features:
-  - Authentication tests
-  - Note CRUD operations
-  - Search functionality with complex queries
-  - Tag management and filtering
-  - Graph view and visualization
-  - Sharing and permissions
-  - Theme customization
-  - Mobile responsiveness
-  - Statistics and analytics
-  - Keyboard shortcuts
+- E2E test suite with 44 spec files covering 12 feature areas
 - Playwright test fixtures for consistent test data
 - Test coverage reporting
 

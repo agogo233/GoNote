@@ -106,7 +106,8 @@
     "load_draft": "Load Draft",
     "load_server_version": "Load Server Version",
     "conflict_external_modified": "Note modified by another source",
-    "keep_my_version": "Keep My Version (Overwrite)"
+    "keep_my_version": "Keep My Version (Overwrite)",
+    "show_more": "Show {{count}} more..."
   },
 
   "folders": {

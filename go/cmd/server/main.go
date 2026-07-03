@@ -213,20 +213,22 @@ func setupRoutes(app *fiber.App, cfg *config.Config) *services.NoteService {
 	graphService := services.NewGraphService(cfg.Storage.NotesDir, noteService)
 	exportService := services.NewExportService(cfg.Storage.NotesDir, themePath)
 
-	// Build search index asynchronously on startup
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				applogger.Printf("Search index build goroutine panic recovered: %v", r)
+	// Build search index asynchronously on startup (only if search is enabled)
+	if cfg.Search.Enabled {
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					applogger.Printf("Search index build goroutine panic recovered: %v", r)
+				}
+			}()
+			applogger.Println("Building search index...")
+			if err := searchIndex.BuildIndex(); err != nil {
+				applogger.Printf("Warning: Failed to build search index: %v", err)
+			} else {
+				applogger.Printf("Search index built with %d terms", searchIndex.GetIndexSize())
 			}
 		}()
-		applogger.Println("Building search index...")
-		if err := searchIndex.BuildIndex(); err != nil {
-			applogger.Printf("Warning: Failed to build search index: %v", err)
-		} else {
-			applogger.Printf("Search index built with %d terms", searchIndex.GetIndexSize())
-		}
-	}()
+	}
 
 	// Initialize handlers
 	noteHandler := handlers.NewNoteHandlerWithTagService(noteService, tagService, cfg, searchIndex)
@@ -319,8 +321,10 @@ func setupRoutes(app *fiber.App, cfg *config.Config) *services.NoteService {
 	api.Post("/folders/rename", middleware.EndpointLimiterSimple(30), folderHandler.Rename)
 	api.Delete("/folders/*", middleware.EndpointLimiterSimple(20), folderHandler.Delete)
 
-	// Search
-	api.Get("/search", searchHandler.Search)
+	// Search (only registered if search is enabled)
+	if cfg.Search.Enabled {
+		api.Get("/search", searchHandler.Search)
+	}
 
 	// Tags
 	api.Get("/tags", tagHandler.List)

@@ -5,15 +5,16 @@ on:
     paths:
       - 'go/**'
       - 'shared/**'
-      - 'tests/e2e/auth/**'
-      - 'tests/e2e/notes/**'
-      - 'tests/e2e/search/**'
-      - 'tests/e2e/folders/**'
+      - 'tests/e2e/**'
 
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     
     steps:
       - uses: actions/checkout@v4
@@ -39,20 +40,22 @@ jobs:
         run: make build
 
       - name: Start server
+        env:
+          AUTHENTICATION_ENABLED: true
+          AUTHENTICATION_PASSWORD: test-admin-password
         run: |
           ./gonote --config go/config.yaml &
           echo "SERVER_PID=$!" >> $GITHUB_ENV
 
       - name: Wait for server
         run: |
-          timeout 60 bash -c 'until curl -s http://localhost:9000 > /dev/null; do sleep 1; done'
+          timeout 60 bash -c 'until curl -s http://localhost:9000/health > /dev/null; do sleep 1; done'
 
-      - name: Run Core Tests
+      - name: Run Core Tests (shard ${{ matrix.shard }}/4)
         env:
-          AUTHENTICATION_ENABLED: true
-          AUTHENTICATION_PASSWORD: test-admin-password
+          CI: 'true'
         run: |
-          npx playwright test --workers=1 auth/ notes/crud.spec.ts search/search.spec.ts
+          npx playwright test --workers=2 --shard=${{ matrix.shard }}/4
 
       - name: Stop server
         run: |
@@ -64,6 +67,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v3
         with:
-          name: core-test-results
+          name: core-test-results-${{ matrix.shard }}
           path: test-results/
           retention-days: 3

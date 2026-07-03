@@ -45,23 +45,39 @@ Logs out the current user session.
 
 ### List All Notes
 ```http
-GET /api/notes
+GET /api/notes?limit=50&page=1
 ```
-Returns all notes with their metadata and folder structure.
+
+Returns all notes with their metadata and folder structure. Supports pagination.
+
+**Optional query parameters:**
+- `limit` - Notes per page (default: 10000, use with `page` for pagination)
+- `page` - Page number (default: 1)
+- `include_media` - Include media notes (`true`/`false`, default: `false`)
 
 **Response:**
 ```json
 {
   "notes": [
     {
-      "path": "folder/note.md",
       "name": "note",
+      "path": "folder/note.md",
       "folder": "folder",
-      "title": "Note Title",
-      "created_at": "2025-11-26T10:30:00Z",
-      "updated_at": "2025-11-26T11:00:00Z"
+      "modified": "2025-11-26T11:00:00Z",
+      "size": 1234,
+      "type": "md",
+      "tags": ["tag1", "tag2"]
     }
-  ]
+  ],
+  "folders": ["folder"],
+  "pagination": {
+    "page": 1,
+    "limit": 50,
+    "total": 10,
+    "total_pages": 1,
+    "has_next": false,
+    "has_prev": false
+  }
 }
 ```
 
@@ -79,9 +95,14 @@ curl http://localhost:9000/api/notes/folder/mynote.md
 **Response:**
 ```json
 {
-  "success": true,
   "path": "folder/mynote.md",
-  "content": "# My Note\nContent here..."
+  "content": "# My Note\nContent here...",
+  "metadata": {
+    "created": "",
+    "modified": "2025-11-26T11:00:00Z",
+    "size": 1234,
+    "lines": 10
+  }
 }
 ```
 
@@ -158,6 +179,8 @@ Content-Type: application/json
 ```json
 {
   "success": true,
+  "oldPath": "note.md",
+  "newPath": "folder/note.md",
   "message": "Note moved successfully"
 }
 ```
@@ -256,14 +279,17 @@ Lists media files that are not referenced by any notes (dangling attachments).
 ```json
 {
   "success": true,
+  "count": 1,
   "files": [
     {
       "path": "folder/_attachments/old-image.png",
+      "filename": "old-image.png",
       "size": 102400,
-      "modified": "2025-11-25T10:30:00Z"
+      "mediaType": "image",
+      "type": "image"
     }
   ],
-  "count": 1
+  "totalSize": 102400
 }
 ```
 
@@ -278,9 +304,10 @@ Deletes all orphaned media files. Returns summary of deleted files.
 ```json
 {
   "success": true,
-  "deleted_count": 5,
-  "freed_space_bytes": 1048576,
-  "message": "Cleaned up 5 orphaned files"
+  "deletedCount": 5,
+  "deletedFiles": ["file1.png", "file2.png"],
+  "freedSpace": 1048576,
+  "message": "Successfully deleted orphaned media files"
 }
 ```
 
@@ -376,30 +403,62 @@ GET /api/search?q={query}
 
 **Optional query parameters:**
 - `q` - Search query (required)
+- `mode` - Search mode (`full`, `title`, `smart`; default: `full`)
 - `page` - Page number (default: 1)
-- `per_page` - Results per page (default: 50)
+- `limit` - Results per page (default: 50)
 
 **Example:**
 ```bash
-curl "http://localhost:9000/api/search?q=hello&page=1&per_page=20"
+curl "http://localhost:9000/api/search?q=hello&page=1&limit=20"
 ```
 
-**Response:**
+**Response (pagination requested):**
 ```json
 {
-  "query": "hello",
   "results": [
     {
+      "name": "note",
       "path": "folder/note.md",
-      "title": "Hello World",
-      "snippet": "...<mark>hello</mark> world...",
+      "folder": "folder",
+      "type": "md",
+      "matches": [
+        {
+          "line_number": 10,
+          "context": "...<mark>hello</mark> world..."
+        }
+      ],
       "score": 1.234
     }
   ],
-  "total": 10,
-  "page": 1,
-  "per_page": 20,
-  "pages": 1
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 10,
+    "total_pages": 1,
+    "has_next": false,
+    "has_prev": false
+  }
+}
+```
+
+**Response (no pagination, backward-compatible):**
+```json
+{
+  "results": [
+    {
+      "name": "note",
+      "path": "folder/note.md",
+      "folder": "folder",
+      "type": "md",
+      "matches": [
+        {
+          "line_number": 10,
+          "context": "...<mark>hello</mark> world..."
+        }
+      ],
+      "score": 1.234
+    }
+  ]
 }
 ```
 
@@ -438,11 +497,15 @@ Returns all notes that have a specific tag.
 ```json
 {
   "tag": "python",
+  "count": 5,
   "notes": [
     {
-      "path": "tutorials/python-basics.md",
       "name": "python-basics",
+      "path": "tutorials/python-basics.md",
       "folder": "tutorials",
+      "modified": "2025-11-26T11:00:00Z",
+      "size": 1234,
+      "type": "md",
       "tags": ["python", "tutorial"]
     }
   ]
@@ -528,9 +591,8 @@ Creates a new note from a template with placeholder replacement.
 ```json
 {
   "success": true,
-  "path": "meetings/weekly-sync.md",
-  "message": "Note created from template successfully",
-  "content": "# Meeting Notes\n\nDate: 2025-11-26\nAttendees: \n..."
+  "notePath": "meetings/weekly-sync.md",
+  "message": "Note created from template"
 }
 ```
 
@@ -795,20 +857,13 @@ Returns application configuration (may filter sensitive fields like secret_key).
 **Response:**
 ```json
 {
-  "app": {
-    "name": "GoNote",
-    "version": "0.25.0"
-  },
-  "server": {
-    "host": "0.0.0.0",
-    "port": 9000,
-    "debug": false
-  },
+  "name": "GoNote",
+  "version": "0.25.0",
+  "searchEnabled": true,
+  "demoMode": false,
+  "alreadyDonated": false,
   "authentication": {
     "enabled": false
-  },
-  "search": {
-    "enabled": true
   }
 }
 ```
@@ -825,8 +880,8 @@ Returns system health status.
 **Response:**
 ```json
 {
-  "status": "healthy",
-  "timestamp": "2025-11-26T11:00:00Z",
+  "status": "ok",
+  "app": "GoNote",
   "version": "0.25.0"
 }
 ```
@@ -854,7 +909,7 @@ All endpoints return JSON responses:
 ```json
 {
   "success": true,
-  "data": { ... }
+  "message": "Operation successful"
 }
 ```
 
@@ -922,7 +977,7 @@ When rate limit is exceeded, server returns `429 Too Many Requests`.
 ## 💡 Usage Tips
 
 - Use `/api/config` to discover current runtime configuration (except secrets)
-- All responses are case-sensitive; use `snake_case` for field names
+- All responses are case-sensitive; response fields use camelCase (e.g., `deletedCount`, `searchEnabled`)
 - For drag & drop media uploads, the `note_path` parameter indicates which note the media is attached to
 - All paths are URL-encoded and case-sensitive
 - When authentication is enabled, include session cookies in requests (browser handles this automatically; for API calls, ensure you're logged in)

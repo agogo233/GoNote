@@ -12,9 +12,6 @@ log:
   # 设为 false 可关闭所有日志输出（启动日志、HTTP请求日志、错误日志等）
   enabled: true             # Enable/disable all logging (env: LOG_ENABLED)
   
-  # 日志文件目录
-  log_dir: "./logs"
-  
 # ==================== 服务器配置 ====================
 server:
   # 监听地址 (环境变量: HOST)
@@ -29,9 +26,6 @@ server:
   
   # 是否启用调试模式 (环境变量: DEBUG)
   debug: false
-  
-  # 是否启用文件更改热重载 (仅开发环境)
-  reload: false
 
 # ==================== 存储配置 ====================
 storage:
@@ -41,22 +35,10 @@ storage:
   # 本地开发: CWD=项目根 => ./data/notes => [project]/data/notes
   notes_dir: "./data/notes"
   
-  # 缓存目录（基于当前工作目录）
-  cache_dir: "./data/cache"
-  
-  # 临时文件目录（基于当前工作目录）
-  temp_dir: "./data/temp"
-  
-  # 备份目录（基于当前工作目录）
-  backup_dir: "./backups"
-  
 # ==================== 搜索配置 ====================
 search:
   # 是否启用搜索功能（环境变量：SEARCH_ENABLED）
   enabled: true
-  
-  # 搜索索引缓存（基于当前工作目录）
-  index_cache_dir: "./data/cache/search"
   
 # ==================== 认证配置 ====================
 authentication:

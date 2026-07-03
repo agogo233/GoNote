@@ -13,6 +13,7 @@ const CONFIG = {
     HOMEPAGE_MAX_NOTES: 50,            // Maximum notes to show on homepage grid
     MAX_SAVE_RETRIES: 3,               // Maximum retry attempts for save operations
     SAVE_RETRY_BASE_DELAY: 1000,       // ms - Base delay for retry (exponential backoff)
+    NOTES_PER_FOLDER_PAGE: 50,         // Max notes rendered per folder page in sidebar
 };
 
 // Expose HOMEPAGE_MAX_NOTES globally for Alpine.js template access
@@ -345,6 +346,9 @@ function noteApp() {
         
         // 笔记列表
         notes: [],
+        
+        // 每文件夹笔记分页状态（用于侧边栏渲染虚拟化）
+        folderNotePages: {},
         
         // 搜索状态
         search: {
@@ -1580,6 +1584,15 @@ function noteApp() {
             await this.loadNotesByTags();
         },
         
+        // Load more notes per folder (rendering virtualisation for sidebar)
+        loadMoreFolderNotes(folderPath) {
+            const pages = this.folderNotePages[folderPath] || 1;
+            this.folderNotePages[folderPath] = pages + 1;
+            // Re-render by re-running buildFolderTree - the tree is stored and re-renders
+            // via Alpine reactivity after updating the folders.tree reference
+            this.buildFolderTree();
+        },
+        
         // Clear tag selection
         clearTagSelection() {
             this.tags.selected = [];
@@ -2340,9 +2353,17 @@ function noteApp() {
                 
                 // Then, render notes and images in this folder (after subfolders)
                 if (folder.notes && folder.notes.length > 0) {
-                    folder.notes.forEach(note => {
+                    const pagesShown = this.folderNotePages[folder.path] || 1;
+                    const maxNotes = CONFIG.NOTES_PER_FOLDER_PAGE * pagesShown;
+                    const totalNotes = folder.notes.length;
+                    const visibleNotes = folder.notes.slice(0, maxNotes);
+                    visibleNotes.forEach(note => {
                         html += this.renderNoteItem(note);
                     });
+                    if (totalNotes > maxNotes) {
+                        const remaining = totalNotes - maxNotes;
+                        html += `<div class="px-2 py-1 text-xs" style="color: var(--text-tertiary); cursor: pointer;" onclick="window.$root.loadMoreFolderNotes('${esc(folder.path)}')">${this.t('notes.show_more', {count: remaining})}</div>`;
+                    }
                 }
                 
                 html += `</div>`; // Close folder-contents

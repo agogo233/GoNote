@@ -71,8 +71,10 @@ func (h *SystemHandler) ReadinessCheck(c *fiber.Ctx) error {
 		checks["scanner"] = "not_configured"
 	}
 
-	// 3. Search index built
-	if h.searchIndex != nil && h.searchIndex.IsReady() {
+	// 3. Search index built (skip check if search is disabled)
+	if !h.config.Search.Enabled {
+		checks["search_index"] = "disabled"
+	} else if h.searchIndex != nil && h.searchIndex.IsReady() {
 		checks["search_index"] = "ok"
 	} else if h.searchIndex != nil {
 		checks["search_index"] = "building"

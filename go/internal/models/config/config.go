@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"os"
 	"strconv"
 	"strings"
@@ -53,7 +54,6 @@ type ServerConfig struct {
 	Port                  int      `yaml:"port"`
 	AllowedOrigins        []string `yaml:"allowed_origins"`
 	Debug                 bool     `yaml:"debug"`
-	Reload                bool     `yaml:"reload"`
 	ProxyHeader           string   `yaml:"proxy_header"`
 	TrustedProxyCheck     bool     `yaml:"trusted_proxy_check"`
 	TrustedProxies        []string `yaml:"trusted_proxies"`
@@ -103,7 +103,9 @@ func Load(configPath string) (*Config, error) {
 	}
 
 	cfg := &Config{}
-	if err := yaml.Unmarshal(data, cfg); err != nil {
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(cfg); err != nil {
 		return nil, err
 	}
 

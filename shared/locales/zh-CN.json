@@ -106,7 +106,8 @@
     "load_draft": "加载草稿",
     "load_server_version": "加载服务器版本",
     "conflict_external_modified": "该笔记已被外部修改",
-    "keep_my_version": "保留我的版本（覆盖）"
+    "keep_my_version": "保留我的版本（覆盖）",
+    "show_more": "还有 {{count}} 条..."
   },
 
   "folders": {
