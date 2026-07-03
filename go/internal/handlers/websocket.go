@@ -18,27 +18,29 @@ type WSMessage struct {
 
 // WSManager manages WebSocket connections and broadcasts
 type WSManager struct {
-	connections map[*websocket.Conn]bool
-	mu          sync.RWMutex
-	broadcast   chan WSMessage
-	register    chan *websocket.Conn
-	unregister  chan *websocket.Conn
-	stop        chan struct{}
-	stopOnce    sync.Once // Ensures Stop() is only called once
-	stopped     bool      // Flag to indicate manager has stopped
+	connections    map[*websocket.Conn]bool
+	mu             sync.RWMutex
+	broadcast      chan WSMessage
+	register       chan *websocket.Conn
+	unregister     chan *websocket.Conn
+	stop           chan struct{}
+	stopOnce       sync.Once // Ensures Stop() is only called once
+	stopped        bool      // Flag to indicate manager has stopped
+	maxConnections int       // Maximum concurrent connections (0 = unlimited)
 }
 
 // Global WebSocket manager instance
 var wsManager *WSManager
 
 // InitWSManager initializes the global WebSocket manager
-func InitWSManager() *WSManager {
+func InitWSManager(maxConnections int) *WSManager {
 	wsManager = &WSManager{
-		connections: make(map[*websocket.Conn]bool),
-		broadcast:   make(chan WSMessage, 100),
-		register:    make(chan *websocket.Conn, 10),
-		unregister:  make(chan *websocket.Conn, 10),
-		stop:        make(chan struct{}),
+		connections:    make(map[*websocket.Conn]bool),
+		broadcast:      make(chan WSMessage, 100),
+		register:       make(chan *websocket.Conn, 10),
+		unregister:     make(chan *websocket.Conn, 10),
+		stop:           make(chan struct{}),
+		maxConnections: maxConnections,
 	}
 	go func() {
 		defer func() {
@@ -174,7 +176,7 @@ func (m *WSManager) Broadcast(msgType string, payload interface{}) {
 }
 
 // Register registers a new WebSocket connection.
-// Returns false if the manager has been stopped or connection is nil.
+// Returns false if the manager has been stopped, connection is nil, or at capacity.
 func (m *WSManager) Register(conn *websocket.Conn) bool {
 	// Reject nil connections
 	if conn == nil {
@@ -183,6 +185,11 @@ func (m *WSManager) Register(conn *websocket.Conn) bool {
 
 	m.mu.RLock()
 	if m.stopped {
+		m.mu.RUnlock()
+		return false
+	}
+	// Check connection limit (0 = unlimited)
+	if m.maxConnections > 0 && len(m.connections) >= m.maxConnections {
 		m.mu.RUnlock()
 		return false
 	}

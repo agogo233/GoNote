@@ -11,7 +11,8 @@
 > 已修复（commit 5815276）：I-6（原子写）、I-7（路径校验统一）、I-8（共享 token TTL + 原子写 + 坏文件备份告警）— 编译零错误，全量测试通过
 > 已修复（commit 3df026c）：I-9（scannerDone 超时等待）、S-10（/healthz + /readyz 拆分，notes_dir/scanner/search index 三项检查）— 编译零错误，全量测试通过
 > 已修复（commit 2f2dd77）：I-2（Cache.Get RLock 优化）、I-3（合并双 tag 缓存）、I-10（反向索引 + 锁外读盘）— 编译零错误，全量测试通过
-> 待修复：S-1, S-2, S-3, S-11, S-12, I-4, I-5, I-11~I-14, I-16, W-1~W-12
+> 已修复（commit 待补）：I-4（Fiber ProxyHeader 使 c.IP() 支持 X-Forwarded-For）、I-5（WebSocket Origin 校验 + ReadLimit/ReadDeadline + 连接上限）— 编译零错误，811 测试全量通过
+> 待修复：S-1, S-2, S-3, S-11, S-12, I-11~I-14, I-16, W-1~W-12
 
 ## 复核结果总览
 
@@ -198,20 +199,20 @@
   - `go/internal/services/tags.go:16` `tagCache map[string]models.TagCacheEntry`（独立第二套 + RWMutex）
 - **修复说明**：删除 TagService 的 `tagCache`/`tagMutex` 字段，`GetTagsCached` 和 `ClearCache` 委托 NoteService 的统一缓存，消除重复
 
-### I-4 IP 限流键不走 X-Forwarded-For，反代后失效
+### I-4 IP 限流键不走 X-Forwarded-For，反代后失效 ✅已修复
 
-- **状态**：确认成立
+- **状态**：确认成立 → 已修复
 - **证据**：`go/internal/middleware/limiter.go:24,48` `return c.IP()`（走 RemoteAddr）
-- **修复建议**：配置 `app.Server().TrustedProxies()`；用稳定标识（session id + 真实 IP）作限流键。
+- **修复说明**：ServerConfig 新增 `proxy_header`/`trusted_proxy_check`/`trusted_proxies` 配置；main.go 创建 Fiber 时应用 `fiber.Config{ProxyHeader, EnableTrustedProxyCheck, TrustedProxies, EnableIPValidation}`；`c.IP()` 在配置后自动读取 `X-Forwarded-For`；env 覆盖 `PROXY_HEADER`/`TRUSTED_PROXY_CHECK`/`TRUSTED_PROXIES`
 
-### I-5 WebSocket 无读超时/消息上限/Origin 校验
+### I-5 WebSocket 无读超时/消息上限/Origin 校验 ✅已修复
 
-- **状态**：确认成立
+- **状态**：确认成立 → 已修复
 - **证据**：
   - `go/internal/handlers/websocket.go` 全文无 `SetReadDeadline`/`SetReadLimit`/`CheckOrigin`
   - `main.go:262-269` `for { c.ReadJSON(&msg) }` 无超时无大小限制
   - `main.go:249` `websocket.New(...)` 未传 `Config{Origins:...}`
-- **修复建议**：握手校验 Origin 在 allowed_origins 内；每连接 `SetReadDeadline(60s)` + ping/pong；`SetReadLimit(N)`；连接数上限明确。
+- **修复说明**：`websocket.New(handler, websocket.Config{Origins: allowedOrigins})` 自动校验 Origin；handler 内 `SetReadLimit(4096)` + `SetReadDeadline(60s)` + `SetPongHandler` 续期；WSManager 新增 `maxConnections` 字段，`Register` 检查容量上限（默认 100）；config 新增 `ws_max_connections`
 
 ### I-6 文件写入非原子，崩溃产生半成品 ✅已修复
 
@@ -356,17 +357,18 @@
 16. **I-2** Cache Get RLock 优化 ✅已修复
 17. **I-9** scanner 引入 WaitGroup + done channel ✅已修复
 18. **I-10** SearchIndex 锁外读盘 + 反向索引 ✅已修复
-19. **I-5** WebSocket 读超时 + Origin + ReadLimit
+19. **I-4** IP 限流键支持 X-Forwarded-For ✅已修复
+20. **I-5** WebSocket 读超时 + Origin + ReadLimit ✅已修复
 
 ### 第 3 批 · 体验质量（6-12 周）
 
-20. **S-12** 回收站/软删除实现
-21. **I-3** 合并双 tag 缓存 ✅已修复
-22. **I-11** 清理死配置或落地实现
-23. **I-12** CI E2E 全量 + 修正 CHANGELOG
-24. **I-14** 统一 API 文档与实现
-25. **I-15** 前端 beforeunload + 草稿 localStorage ✅已修复
-26. **I-16** 前端虚拟滚动
-27. 其余 W-1~W-12 建议项
+21. **S-12** 回收站/软删除实现
+22. **I-3** 合并双 tag 缓存 ✅已修复
+23. **I-11** 清理死配置或落地实现
+24. **I-12** CI E2E 全量 + 修正 CHANGELOG
+25. **I-14** 统一 API 文档与实现
+26. **I-15** 前端 beforeunload + 草稿 localStorage ✅已修复
+27. **I-16** 前端虚拟滚动
+28. 其余 W-1~W-12 建议项
 
 > 完整证据链（含代码片段）复核报告见会话记录。修复时建议遵循：每条 issue 一次 PR + 附 regression 测试，避免大改次生风险。

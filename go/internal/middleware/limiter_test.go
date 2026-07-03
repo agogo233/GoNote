@@ -313,3 +313,50 @@ func TestRateLimiterExpiration(t *testing.T) {
 	resp3, _ := app.Test(req3)
 	assert.Equal(t, 200, resp3.StatusCode)
 }
+
+func TestRateLimiterXForwardedFor(t *testing.T) {
+	cfg := &config.Config{
+		RateLimit: config.RateLimitConfig{
+			Enabled:      true,
+			MaxRequests:  2,
+			WindowSeconds: 1,
+		},
+		Server: config.ServerConfig{
+			ProxyHeader: "X-Forwarded-For",
+		},
+	}
+	config.GlobalConfig = cfg
+	defer func() { config.GlobalConfig = nil }()
+
+	app := fiber.New(fiber.Config{
+		ProxyHeader:        "X-Forwarded-For",
+		EnableIPValidation: false,
+	})
+	app.Use(RateLimiter())
+	app.Get("/", func(c *fiber.Ctx) error {
+		return c.SendString("ok")
+	})
+
+	// Requests with X-Forwarded-For should use that value for rate limiting
+	for i := 0; i < 2; i++ {
+		req := httptest.NewRequest("GET", "/", nil)
+		req.Header.Set("X-Forwarded-For", "10.0.0.1")
+		resp, err := app.Test(req)
+		assert.NoError(t, err)
+		assert.Equal(t, 200, resp.StatusCode)
+	}
+
+	// 3rd request from same X-Forwarded-For IP should be rate limited
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("X-Forwarded-For", "10.0.0.1")
+	resp, err := app.Test(req)
+	assert.NoError(t, err)
+	assert.Equal(t, 429, resp.StatusCode)
+
+	// Different X-Forwarded-For IP should still work
+	req2 := httptest.NewRequest("GET", "/", nil)
+	req2.Header.Set("X-Forwarded-For", "10.0.0.2")
+	resp2, err := app.Test(req2)
+	assert.NoError(t, err)
+	assert.Equal(t, 200, resp2.StatusCode)
+}

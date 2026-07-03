@@ -81,10 +81,14 @@ func main() {
 
 	// Create Fiber app with body limit from config
 	app := fiber.New(fiber.Config{
-		AppName:      cfg.App.Name,
-		ServerHeader: cfg.App.Name,
-		ErrorHandler: middleware.ErrorHandler(cfg.Server.Debug),
-		BodyLimit:    cfg.Upload.MaxBodySizeMB * 1024 * 1024, // Convert MB to bytes
+		AppName:                 cfg.App.Name,
+		ServerHeader:            cfg.App.Name,
+		ErrorHandler:            middleware.ErrorHandler(cfg.Server.Debug),
+		BodyLimit:               cfg.Upload.MaxBodySizeMB * 1024 * 1024, // Convert MB to bytes
+		ProxyHeader:             cfg.Server.ProxyHeader,
+		EnableTrustedProxyCheck: cfg.Server.TrustedProxyCheck,
+		TrustedProxies:          cfg.Server.TrustedProxies,
+		EnableIPValidation:      cfg.Server.TrustedProxyCheck,
 	})
 
 	// Middleware
@@ -180,7 +184,7 @@ func setupRoutes(app *fiber.App, cfg *config.Config) *services.NoteService {
 	frontendPath := resolveStaticPath("frontend", "./shared/frontend", "../shared/frontend", "./frontend")
 
 	// Initialize WebSocket manager
-	handlers.InitWSManager()
+	handlers.InitWSManager(cfg.Server.WSMaxConnections)
 
 	// Initialize services with background scanner
 	cacheTTL := time.Duration(cfg.Cache.TTL) * time.Second
@@ -255,7 +259,15 @@ func setupRoutes(app *fiber.App, cfg *config.Config) *services.NoteService {
 
 	// WebSocket endpoint for real-time updates (with authentication check)
 	app.Get("/ws", middleware.WSAuthRequired(cfg.Authentication.Enabled), websocket.New(func(c *websocket.Conn) {
-		// Register new connection (returns false if manager stopped)
+		// Set per-connection security limits
+		c.SetReadLimit(4096)                                       // Max message size: 4KB
+		c.SetReadDeadline(time.Now().Add(60 * time.Second))         // Read deadline: 60s
+		c.SetPongHandler(func(string) error {
+			c.SetReadDeadline(time.Now().Add(60 * time.Second)) // Extend on pong
+			return nil
+		})
+
+		// Register new connection (returns false if manager stopped or at capacity)
 		if !handlers.GetWSManager().Register(c) {
 			c.Close()
 			return
@@ -266,7 +278,7 @@ func setupRoutes(app *fiber.App, cfg *config.Config) *services.NoteService {
 			handlers.GetWSManager().Unregister(c)
 		}()
 
-		// Keep connection alive, read incoming messages (ping/pong handled by Fiber)
+		// Keep connection alive, read incoming messages (ping/pong handled by gorilla/websocket)
 		var msg map[string]interface{}
 		for {
 			if err := c.ReadJSON(&msg); err != nil {
@@ -275,6 +287,8 @@ func setupRoutes(app *fiber.App, cfg *config.Config) *services.NoteService {
 			// We don't expect any meaningful messages from clients
 			// Just keep reading to detect disconnection
 		}
+	}, websocket.Config{
+		Origins: cfg.Server.AllowedOrigins,
 	}))
 
 	// Login routes (public)

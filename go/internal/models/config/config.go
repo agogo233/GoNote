@@ -49,11 +49,15 @@ type LogConfig struct {
 
 // ServerConfig holds server settings
 type ServerConfig struct {
-	Host           string   `yaml:"host"`
-	Port           int      `yaml:"port"`
-	AllowedOrigins []string `yaml:"allowed_origins"`
-	Debug          bool     `yaml:"debug"`
-	Reload         bool     `yaml:"reload"`
+	Host                  string   `yaml:"host"`
+	Port                  int      `yaml:"port"`
+	AllowedOrigins        []string `yaml:"allowed_origins"`
+	Debug                 bool     `yaml:"debug"`
+	Reload                bool     `yaml:"reload"`
+	ProxyHeader           string   `yaml:"proxy_header"`
+	TrustedProxyCheck     bool     `yaml:"trusted_proxy_check"`
+	TrustedProxies        []string `yaml:"trusted_proxies"`
+	WSMaxConnections      int      `yaml:"ws_max_connections"`
 }
 
 // StorageConfig holds storage paths
@@ -147,6 +151,9 @@ func applyDefaults(cfg *Config) {
 	// Server defaults
 	if len(cfg.Server.AllowedOrigins) == 0 {
 		cfg.Server.AllowedOrigins = []string{"*"} // Allow all origins by default
+	}
+	if cfg.Server.WSMaxConnections == 0 {
+		cfg.Server.WSMaxConnections = 100 // Default max 100 concurrent WS connections
 	}
 }
 
@@ -263,6 +270,26 @@ func applyEnvOverrides(cfg *Config) {
 
 	// ALREADY_DONATED
 	AlreadyDonated = strings.ToLower(os.Getenv("ALREADY_DONATED")) == "true"
+
+	// ========== 代理配置 ==========
+	// PROXY_HEADER override (e.g. "X-Forwarded-For")
+	if v := os.Getenv("PROXY_HEADER"); v != "" {
+		cfg.Server.ProxyHeader = v
+	}
+
+	// TRUSTED_PROXY_CHECK override
+	if v := os.Getenv("TRUSTED_PROXY_CHECK"); v != "" {
+		cfg.Server.TrustedProxyCheck = strings.ToLower(v) == "true"
+	}
+
+	// TRUSTED_PROXIES override (comma-separated)
+	if v := os.Getenv("TRUSTED_PROXIES"); v != "" {
+		proxies := strings.Split(v, ",")
+		for i, p := range proxies {
+			proxies[i] = strings.TrimSpace(p)
+		}
+		cfg.Server.TrustedProxies = proxies
+	}
 
 	// ========== 存储配置 ==========
 	// STORAGE_NOTES_DIR override
