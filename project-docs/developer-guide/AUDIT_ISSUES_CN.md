@@ -7,7 +7,8 @@
 >
 > ## 修复状态
 > 已修复（commit 1d9b898）：S-4, S-5, S-6, S-7, S-8, S-9 — 编译零错误，799 测试全量通过
-> 待修复：S-1, S-2, S-3, S-10, S-11, S-12, I-1~I-16, W-1~W-12
+> 已修复（commit 82a22d5）：I-1（per-path mutex + mtime 乐观锁 + 409 冲突响应）、I-15（多槽草稿 + dirty 追踪 + beforeunload + 409 冲突 banner）— 编译零错误，799 测试全量通过
+> 待修复：S-1, S-2, S-3, S-10, S-11, S-12, I-2~I-14, I-16, W-1~W-12
 
 ## 复核结果总览
 
@@ -173,9 +174,10 @@
 
 ## 二、【重要】共 16 项
 
-### I-1 同一笔记并发写入无锁，最后写胜出
+### I-1 同一笔记并发写入无锁，最后写胜出 ✅已修复（commit 82a22d5）
 
-- **状态**：确认成立
+- **状态**：确认成立 → 已修复
+- **修复说明**：NoteService 新增 `pathMu sync.Map` 惰性建锁 + `SaveNoteWithCheck(path, content, knownMtime)`；handler 扩展请求体 `modified` 字段，冲突返回 409 + 服务端 mtime；`NoteSaveResponse.Modified` 返回保存后权威 mtime；前端 `loadNote` 存服务端 mtime，`saveNote` 携带并在成功后用服务端值替换；旧前端不传 modified 时跳过乐观锁保持向后兼容
 - **证据**：`go/internal/services/notes.go:262-289` SaveNote 无 mutex/版本号/ETag 校验
 - **修复建议**：per-path mutex（`sync.Map[string]*sync.Mutex`）串行化写；保存时校验客户端携带的 mtime，冲突返回 409。
 
@@ -291,9 +293,10 @@
   - 列表无 `size/type/tags`，文档未列；搜索 API 用 `limit` 文档写 `per_page`
 - **修复建议**：统一字段名（实现真实用 `modified`/`limit`，修文档）；补全文档列全字段；分页响应结构固定。
 
-### I-15 前端无未保存离开提醒，自动保存无草稿恢复
+### I-15 前端无未保存离开提醒，自动保存无草稿恢复 ✅已修复（commit 82a22d5）
 
-- **状态**：确认成立
+- **状态**：确认成立 → 已修复
+- **修复说明**：注册 `beforeunload` + dirty 状态追踪；草稿系统从单槽改为多槽 localStorage（`gonote_draft:<path>` key，7 天 TTL 自动清理，配额满时删最旧 10 条重试）；2s 定时落草稿；启动时弹多笔记恢复列表；恢复草稿时检测服务端是否有更新版本，触发二级决策 modal；409 冲突 banner（加载服务器版本 / 保留我的版本，30s 自动收起）；DeleteNote/MoveNote 成功后清理对应草稿；补齐 en-US/zh-CN 11 个新 i18n key
 - **证据**：`grep beforeunload shared/frontend` 零命中；无 dirty 状态追踪；无 Service Worker sync/IndexedDB 写回放
 - **修复建议**：注册 `beforeunload` + dirty 追踪；localStorage 草稿 + 重入恢复提示。
 
@@ -344,7 +347,7 @@
 12. **S-6** 后台扫描同步刷新 SearchIndex（注入引用）✅已修复
 13. **S-8** MoveNote 改为"先 rename 再 update backlinks"+补偿回滚 ✅已修复
 14. **S-10** /healthz + /readyz 拆分
-15. **I-1** 并发写入加 mutex + mtime 乐观锁
+15. **I-1** 并发写入加 mutex + mtime 乐观锁 ✅已修复
 16. **I-2** Cache 分片或 RLock 优化
 17. **I-9** scanner 引入 WaitGroup + done channel
 18. **I-10** SearchIndex 锁外读盘
@@ -357,7 +360,7 @@
 22. **I-11** 清理死配置或落地实现
 23. **I-12** CI E2E 全量 + 修正 CHANGELOG
 24. **I-14** 统一 API 文档与实现
-25. **I-15** 前端 beforeunload + 草稿 localStorage
+25. **I-15** 前端 beforeunload + 草稿 localStorage ✅已修复
 26. **I-16** 前端虚拟滚动
 27. 其余 W-1~W-12 建议项
 
