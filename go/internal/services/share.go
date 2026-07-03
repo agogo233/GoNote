@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sync"
@@ -38,7 +39,12 @@ func (s *ShareService) getTokensFilePath() string {
 	return filepath.Join(s.notesDir, ".share-tokens.json")
 }
 
-// loadTokens loads share tokens from file
+// loadTokens loads share tokens from file. Expired tokens are filtered out
+// (but not persisted here — they will be dropped on the next successful
+// mutation that calls saveTokens). A corrupted token file is backed up to
+// .share-tokens.json.broken.<unix> and an empty map is returned with a nil
+// error so the service stays usable, instead of silently wiping the tokens
+// (or fataling the startup).
 func (s *ShareService) loadTokens() (map[string]models.ShareToken, error) {
 	tokensFile := s.getTokensFilePath()
 
@@ -52,31 +58,61 @@ func (s *ShareService) loadTokens() (map[string]models.ShareToken, error) {
 
 	var tokens map[string]models.ShareToken
 	if err := json.Unmarshal(data, &tokens); err != nil {
+		// Backup the corrupt file with a timestamped name so the operator can
+		// investigate, then fall back to an empty token set rather than
+		// silently losing all share links.
+		backup := fmt.Sprintf("%s.broken.%d", tokensFile, time.Now().Unix())
+		if renameErr := os.Rename(tokensFile, backup); renameErr != nil {
+			log.Printf("[share] tokens file corrupt AND backup failed: %v (orig error: %v)", renameErr, err)
+		} else {
+			log.Printf("[share] tokens file corrupt, backed up to %s (error: %v)", backup, err)
+		}
 		return make(map[string]models.ShareToken), nil
+	}
+
+	// Filter out expired tokens in-memory. Persistence cleanup happens lazily
+	// on the next saveTokens call.
+	now := time.Now().UTC()
+	for token, info := range tokens {
+		if info.ExpiresAt == "" {
+			continue
+		}
+		expiresAt, parseErr := time.Parse(time.RFC3339, info.ExpiresAt)
+		if parseErr != nil {
+			// Unparseable expiry: treat as expired to be safe.
+			delete(tokens, token)
+			continue
+		}
+		if now.After(expiresAt) {
+			delete(tokens, token)
+		}
 	}
 
 	return tokens, nil
 }
 
-// saveTokens saves share tokens to file
+// saveTokens saves share tokens to file atomically so a crash mid-write
+// cannot leave a half-written token file.
 func (s *ShareService) saveTokens(tokens map[string]models.ShareToken) error {
 	tokensFile := s.getTokensFilePath()
-
-	// Ensure parent directory exists
-	if err := os.MkdirAll(filepath.Dir(tokensFile), 0755); err != nil {
-		return err
-	}
 
 	data, err := json.MarshalIndent(tokens, "", "  ")
 	if err != nil {
 		return err
 	}
 
-	return os.WriteFile(tokensFile, data, 0644)
+	return AtomicWrite(tokensFile, data, 0644)
 }
 
-// CreateShareToken creates a share token for a note
+// CreateShareToken creates a share token for a note with no expiry.
+// Backward-compatible wrapper around CreateShareTokenWithTTL.
 func (s *ShareService) CreateShareToken(notePath, theme string) (string, error) {
+	return s.CreateShareTokenWithTTL(notePath, theme, 0)
+}
+
+// CreateShareTokenWithTTL creates a share token for a note with an optional
+// time-to-live. A ttl <= 0 means the token never expires.
+func (s *ShareService) CreateShareTokenWithTTL(notePath, theme string, ttl time.Duration) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -85,9 +121,16 @@ func (s *ShareService) CreateShareToken(notePath, theme string) (string, error) 
 		return "", err
 	}
 
-	// Check if note already has a token
+	// Check if note already has a token (and refresh its expiry if ttl given)
 	for token, info := range tokens {
 		if info.Path == notePath {
+			if ttl > 0 {
+				info.ExpiresAt = time.Now().Add(ttl).UTC().Format(time.RFC3339)
+				tokens[token] = info
+				if saveErr := s.saveTokens(tokens); saveErr != nil {
+					return "", saveErr
+				}
+			}
 			return token, nil
 		}
 	}
@@ -108,11 +151,15 @@ func (s *ShareService) CreateShareToken(notePath, theme string) (string, error) 
 	}
 
 	// Store token
-	tokens[token] = models.ShareToken{
+	st := models.ShareToken{
 		Path:    notePath,
 		Theme:   theme,
 		Created: time.Now().UTC().Format(time.RFC3339),
 	}
+	if ttl > 0 {
+		st.ExpiresAt = time.Now().Add(ttl).UTC().Format(time.RFC3339)
+	}
+	tokens[token] = st
 
 	if err := s.saveTokens(tokens); err != nil {
 		return "", err

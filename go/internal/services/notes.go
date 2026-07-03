@@ -319,7 +319,7 @@ func (s *NoteService) SaveNoteWithCheck(notePath, content, knownMtime string) er
 		return err
 	}
 
-	if err := os.WriteFile(fullPath, []byte(content), 0644); err != nil {
+	if err := AtomicWrite(fullPath, []byte(content), 0644); err != nil {
 		return err
 	}
 
@@ -545,13 +545,12 @@ func (s *NoteService) SaveUploadedImage(notePath, filename string, data []byte) 
 
 	// Security check
 	absPath, _ := filepath.Abs(fullPath)
-	absNotesDir, _ := filepath.Abs(s.notesDir)
-	if !strings.HasPrefix(absPath, absNotesDir) {
+	if !ValidatePathSecurityAbs(s.notesDir, absPath) {
 		return "", fmt.Errorf("invalid path")
 	}
 
 	// Write file
-	if err := os.WriteFile(fullPath, data, 0644); err != nil {
+	if err := AtomicWrite(fullPath, data, 0644); err != nil {
 		return "", err
 	}
 

@@ -34,12 +34,53 @@ func ValidatePathSecurityAbs(notesDir, absTarget string) bool {
 	if err != nil {
 		return false
 	}
-	// Ensure the target is within notesDir by checking prefix with separator
-	// This prevents /app/data-backup from matching /app/data
-	if absTarget == absNotesDir {
+	return IsPathInside(absTarget, absNotesDir)
+}
+
+// IsPathInside reports whether absTarget is equal to or nested under absParent.
+// Both must be cleaned absolute paths. Prevents /app/data-backup from matching
+// /app/data by requiring a path separator boundary.
+func IsPathInside(absTarget, absParent string) bool {
+	if absTarget == absParent {
 		return true
 	}
-	return strings.HasPrefix(absTarget, absNotesDir+string(filepath.Separator))
+	return strings.HasPrefix(absTarget, absParent+string(filepath.Separator))
+}
+
+// AtomicWrite writes data to path atomically: it first writes to a sibling
+// temporary file in the same directory (guaranteeing same filesystem so
+// rename is atomic) and then renames it over the target. On failure the
+// target file is left untouched. The temporary file is removed on error.
+func AtomicWrite(path string, data []byte, perm os.FileMode) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".*.tmp")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	cleaned := false
+	defer func() {
+		if !cleaned {
+			tmp.Close()
+			os.Remove(tmpName)
+		}
+	}()
+	if _, err := tmp.Write(data); err != nil {
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmpName, perm); err != nil {
+		return err
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		return err
+	}
+	cleaned = true
+	return nil
 }
 
 // SanitizeFilename removes dangerous characters from filenames

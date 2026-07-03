@@ -80,9 +80,10 @@ type Locale struct {
 
 // ShareToken represents a share token for public note access
 type ShareToken struct {
-	Path    string `json:"path"`
-	Theme   string `json:"theme"`
-	Created string `json:"created"`
+	Path      string `json:"path"`
+	Theme     string `json:"theme"`
+	Created   string `json:"created"`
+	ExpiresAt string `json:"expires_at,omitempty"` // RFC3339, empty = never expires
 }
 
 // ShareInfo represents share information for a note

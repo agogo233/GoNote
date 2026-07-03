@@ -141,8 +141,7 @@ func (h *MediaHandler) Upload(c *fiber.Ctx) error {
 
 	// Security check - ensure path is within notes directory
 	absPath, _ := filepath.Abs(fullPath)
-	absNotesDir, _ := filepath.Abs(h.config.Storage.NotesDir)
-	if !strings.HasPrefix(absPath, absNotesDir) {
+	if !services.ValidatePathSecurityAbs(h.config.Storage.NotesDir, absPath) {
 		return c.Status(400).JSON(fiber.Map{"detail": "Invalid path"})
 	}
 

@@ -3,8 +3,10 @@ package services
 import (
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestShareService_CreateShareToken(t *testing.T) {
@@ -521,6 +523,180 @@ func TestShareService_CorruptedTokenFile(t *testing.T) {
 		}
 		if len(paths) != 0 {
 			t.Errorf("Expected empty paths for missing file, got %d", len(paths))
+		}
+	})
+}
+
+func TestShareService_CreateShareTokenWithTTL(t *testing.T) {
+	t.Run("expired token is filtered on load", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		svc := NewShareService(tmpDir)
+
+		// Create a permanent token first, then rewrite its ExpiresAt to the past
+		// and reload to verify loadTokens filters expired entries.
+		token, err := svc.CreateShareToken("notes/test.md", "dark")
+		if err != nil {
+			t.Fatalf("CreateShareToken failed: %v", err)
+		}
+
+		// Rewrite the tokens file with an already-expired ExpiresAt.
+		tokensFile := svc.getTokensFilePath()
+		past := time.Now().Add(-1 * time.Hour).UTC().Format(time.RFC3339)
+		corpus := fmt.Sprintf(`{"%s":{"path":"notes/test.md","theme":"dark","created":"2024-01-01T00:00:00Z","expires_at":"%s"}}`, token, past)
+		if err := os.WriteFile(tokensFile, []byte(corpus), 0644); err != nil {
+			t.Fatalf("rewrite failed: %v", err)
+		}
+
+		// Fresh service loads from disk and should filter out the expired token.
+		svc2 := NewShareService(tmpDir)
+		_, exists := svc2.GetNoteByToken(token)
+		if exists {
+			t.Error("Expired token should not be accessible via GetNoteByToken")
+		}
+		_, exists = svc2.GetShareToken("notes/test.md")
+		if exists {
+			t.Error("Expired token should not be returned via GetShareToken")
+		}
+	})
+
+	t.Run("future-expiry token is accessible", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		svc := NewShareService(tmpDir)
+
+		token, err := svc.CreateShareTokenWithTTL("notes/live.md", "light", 1*time.Hour)
+		if err != nil {
+			t.Fatalf("CreateShareTokenWithTTL failed: %v", err)
+		}
+
+		info, exists := svc.GetNoteByToken(token)
+		if !exists {
+			t.Fatal("Future-expiry token should be accessible")
+		}
+		if info.ExpiresAt == "" {
+			t.Error("Expected ExpiresAt to be set for TTL token")
+		}
+	})
+
+	t.Run("ttl zero means never expires", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		svc := NewShareService(tmpDir)
+
+		token, err := svc.CreateShareTokenWithTTL("notes/forever.md", "light", 0)
+		if err != nil {
+			t.Fatalf("CreateShareTokenWithTTL failed: %v", err)
+		}
+		info, exists := svc.GetNoteByToken(token)
+		if !exists {
+			t.Fatal("Zero-TTL token should be accessible")
+		}
+		if info.ExpiresAt != "" {
+			t.Errorf("Expected empty ExpiresAt for never-expire token, got %q", info.ExpiresAt)
+		}
+	})
+
+	t.Run("existing token refresh expiry when ttl given", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		svc := NewShareService(tmpDir)
+
+		// Create permanent token.
+		token, _ := svc.CreateShareToken("notes/refresh.md", "dark")
+		// Re-create with TTL: should NOT create new token, but refresh expiry.
+		token2, err := svc.CreateShareTokenWithTTL("notes/refresh.md", "dark", 2*time.Hour)
+		if err != nil {
+			t.Fatalf("refresh failed: %v", err)
+		}
+		if token != token2 {
+			t.Fatalf("Expected same token after refresh, got %s vs %s", token, token2)
+		}
+		info, _ := svc.GetNoteByToken(token)
+		if info.ExpiresAt == "" {
+			t.Error("Expected ExpiresAt to be refreshed")
+		}
+	})
+}
+
+func TestShareService_CorruptedTokenFileBackedUp(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	tokensFile := fmt.Sprintf("%s/.share-tokens.json", tmpDir)
+	os.WriteFile(tokensFile, []byte("invalid json {{{"), 0644)
+
+	svc := NewShareService(tmpDir)
+	// Service should still be usable.
+	_, err := svc.GetAllSharedPaths()
+	if err != nil {
+		t.Fatalf("GetAllSharedPaths should not error on corrupt file: %v", err)
+	}
+
+	// The corrupt file should have been renamed to a .broken.<unix> backup.
+	entries, err := os.ReadDir(tmpDir)
+	if err != nil {
+		t.Fatalf("ReadDir failed: %v", err)
+	}
+	found := false
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), ".share-tokens.json.broken.") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("Expected a backup file (.share-tokens.json.broken.*) to exist after corrupt load")
+	}
+
+	// And we can now create a fresh token (write-path works).
+	_, err = svc.CreateShareToken("notes/after.md", "dark")
+	if err != nil {
+		t.Fatalf("CreateShareToken after corrupt-recovery failed: %v", err)
+	}
+}
+
+func TestAtomicWrite(t *testing.T) {
+	t.Run("writes content atomically", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		path := tmpDir + "/sub/file.txt"
+		want := []byte("hello world")
+		if err := AtomicWrite(path, want, 0644); err != nil {
+			t.Fatalf("AtomicWrite failed: %v", err)
+		}
+		got, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("ReadFile failed: %v", err)
+		}
+		if string(got) != string(want) {
+			t.Errorf("got %q want %q", got, want)
+		}
+		// No leftover .tmp files in the directory.
+		entries, _ := os.ReadDir(tmpDir + "/sub")
+		for _, e := range entries {
+			if strings.HasSuffix(e.Name(), ".tmp") {
+				t.Errorf("leftover temp file: %s", e.Name())
+			}
+		}
+	})
+
+	t.Run("overwrites existing file", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		path := tmpDir + "/f.txt"
+		os.WriteFile(path, []byte("old"), 0644)
+		if err := AtomicWrite(path, []byte("new content"), 0644); err != nil {
+			t.Fatalf("AtomicWrite failed: %v", err)
+		}
+		got, _ := os.ReadFile(path)
+		if string(got) != "new content" {
+			t.Errorf("got %q want %q", got, "new content")
+		}
+	})
+
+	t.Run("preserves file mode", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		path := tmpDir + "/mode.txt"
+		if err := AtomicWrite(path, []byte("x"), 0600); err != nil {
+			t.Fatalf("AtomicWrite failed: %v", err)
+		}
+		info, _ := os.Stat(path)
+		if info.Mode().Perm() != 0600 {
+			t.Errorf("got mode %v want 0600", info.Mode().Perm())
 		}
 	})
 }

@@ -8,7 +8,8 @@
 > ## 修复状态
 > 已修复（commit 1d9b898）：S-4, S-5, S-6, S-7, S-8, S-9 — 编译零错误，799 测试全量通过
 > 已修复（commit 82a22d5）：I-1（per-path mutex + mtime 乐观锁 + 409 冲突响应）、I-15（多槽草稿 + dirty 追踪 + beforeunload + 409 冲突 banner）— 编译零错误，799 测试全量通过
-> 待修复：S-1, S-2, S-3, S-10, S-11, S-12, I-2~I-14, I-16, W-1~W-12
+> 已修复（commit 待补）：I-6（原子写）、I-7（路径校验统一）、I-8（共享 token TTL + 原子写 + 坏文件备份告警）— 编译零错误，全量测试通过
+> 待修复：S-1, S-2, S-3, S-10, S-11, S-12, I-2~I-5, I-9~I-14, I-16, W-1~W-12
 
 ## 复核结果总览
 
@@ -211,27 +212,30 @@
   - `main.go:249` `websocket.New(...)` 未传 `Config{Origins:...}`
 - **修复建议**：握手校验 Origin 在 allowed_origins 内；每连接 `SetReadDeadline(60s)` + ping/pong；`SetReadLimit(N)`；连接数上限明确。
 
-### I-6 文件写入非原子，崩溃产生半成品
+### I-6 文件写入非原子，崩溃产生半成品 ✅已修复
 
-- **状态**：确认成立
+- **状态**：确认成立 → 已修复
+- **修复说明**：在 `files.go` 新增公共 `AtomicWrite(path, data, perm)`：写入同目录临时文件后 `os.Rename` 原子替换，失败时清理临时文件、目标文件保持原状。`SaveNoteWithCheck`（notes.go）与 `saveTokens`（share.go）统一改用 `AtomicWrite`，杜绝崩溃/断电产生半成品文件
 - **证据**：
   - `go/internal/services/notes.go:281` `os.WriteFile(fullPath, content, 0644)`
   - `go/internal/services/share.go:62-76` token 文件同样非原子写
   - `share.go:53-57` 损坏时 `loadTokens` 静默返回空 map → 所有 share 链接默默失效
 - **修复建议**：写临时文件（`full+".tmp"`） + `os.Rename` 原子替换。
 
-### I-7 `SaveUploadedImage` 路径校验与 `ValidatePathSecurity` 不一致
+### I-7 `SaveUploadedImage` 路径校验与 `ValidatePathSecurity` 不一致 ✅已修复
 
-- **状态**：确认成立
+- **状态**：确认成立 → 已修复
+- **修复说明**：新增公共 `IsPathInside(absTarget, absParent string)` 并将 `ValidatePathSecurityAbs` 改为内部委托它；`notes.go` `SaveUploadedImage` 与 `handlers/media.go` 上传路径校验统一改用 `ValidatePathSecurityAbs`；`export.go` `readLibFile` 改用 `IsPathInside`，消除三处各自的 `strings.HasPrefix(absPath, absNotesDir)` 缺分隔符隐患
 - **证据**：
   - `go/internal/services/notes.go:494` `if !strings.HasPrefix(absPath, absNotesDir)` 缺 `+Separator`
   - 对比 `go/internal/services/files.go:23-29` `HasPrefix(absTarget, absNotesDir+sep)` 是标准
 - **影响**：理论上 `/app/data-backup/x` 误匹配为 `/app/data` 子路径；`export.go:72` 同缺陷。
 - **修复建议**：统一使用 `ValidatePathSecurityAbs`；`SanitizeFilename` 应把 `/` 也替换。
 
-### I-8 共享 token 无 TTL、非原子写、损坏静默清空
+### I-8 共享 token 无 TTL、非原子写、损坏静默清空 ✅已修复
 
-- **状态**：确认成立
+- **状态**：确认成立 → 已修复
+- **修复说明**：`models.ShareToken` 增 `ExpiresAt string \`json:"expires_at,omitempty"\``（RFC3339，空 = 永久）；新增 `CreateShareTokenWithTTL(notePath, theme string, ttl time.Duration)`，`CreateShareToken` 保留为永久版本向后兼容；`loadTokens` 解析时即时过滤已过期项并惰性清理（下次 mutation 写盘时丢弃）；`saveTokens` 改用 I-6 的 `AtomicWrite`；损坏的 tokens 文件被重命名为 `.share-tokens.json.broken.<unix>` 备份并 `log.Printf` 告警后回退空 map（服务可用），取代静默清空
 - **证据**：`go/internal/services/share.go:62-76`（非原子写）+ L53-57 静默空 map + `models.ShareToken` 无 `expires_at`
 - **修复建议**：加 `expires_at` 字段，加载时过滤过期；原子写；损坏时备份并告警而非静默清空。
 
@@ -337,8 +341,8 @@
 5. **S-4** scanner panic 加 `defer close(s.ready)` ✅已修复
 6. **S-9** 容器改非 root 用户 ✅已修复
 7. **S-11** 前端 DOMPurify 清洗 marked 输出
-8. **I-6** 文件写入原子化
-9. **I-7** `SaveUploadedImage` 路径校验统一
+8. **I-6** 文件写入原子化 ✅已修复
+9. **I-7** `SaveUploadedImage` 路径校验统一 ✅已修复
 10. **I-13** core-e2e env 时机修复
 
 ### 第 2 批 · 核心完善（3-6 周）

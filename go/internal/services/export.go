@@ -69,7 +69,7 @@ func (s *ExportService) readLibFile(relPath string) string {
 	if err != nil {
 		return ""
 	}
-	if !strings.HasPrefix(absFullPath, absLibsDir) {
+	if !IsPathInside(absFullPath, absLibsDir) {
 		return ""
 	}
 	data, err := os.ReadFile(fullPath)
