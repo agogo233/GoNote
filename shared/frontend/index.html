@@ -3155,7 +3155,7 @@
                             x-show="!media.current && (ui.viewMode === 'edit' || ui.viewMode === 'split')"
                             class="flex flex-col"
                             style="min-height: 0;"
-                            :style="ui.viewMode === 'split' ? `width: ${ui.editorWidth}%;` : 'width: 100%;'"
+                            :style="ui.viewMode === 'split' ? `width: ${ui.editorWidth}%; flex-shrink: 0;` : 'width: 100%; flex-shrink: 0;'"
                         >
                             <!-- Markdown Formatting Toolbar -->
                             <div class="flex items-center gap-1 px-2 py-1.5 border-b flex-shrink-0" style="background-color: var(--bg-secondary); border-color: var(--border-primary);">
@@ -3269,7 +3269,7 @@
                             x-show="(ui.viewMode === 'preview' || ui.viewMode === 'split') && !media.current"
                             class="overflow-y-auto overflow-x-hidden custom-scrollbar"
                             style="background-color: var(--bg-primary); min-height: 0;"
-                            :style="ui.viewMode === 'split' ? `width: ${100 - ui.editorWidth}%;` : 'width: 100%;'"
+                            :style="ui.viewMode === 'split' ? 'flex: 1; min-width: 0;' : 'width: 100%;'"
                         >
                             <!-- Note Properties/Metadata Panel -->
                             <div 

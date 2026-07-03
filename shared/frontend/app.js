@@ -5789,15 +5789,15 @@ function noteApp() {
                 preview.removeEventListener('scroll', this._previewScrollHandler);
             }
             
-            // Create new scroll handlers
+            // Create new scroll handlers with cooldown-based debounce
+            // Key improvement: isScrolling holds for SCROLL_SYNC_DELAY (50ms) instead of
+            // being immediately reset on the first reverse event. This prevents oscillation
+            // when browser momentum/inertia scroll events fire during the sync cascade.
             this._editorScrollHandler = () => {
-                if (this.ui.isScrolling) {
-                    this.ui.isScrolling = false;
-                    return;
-                }
+                if (this.ui.isScrolling) return;
                 
                 const scrollableHeight = editor.scrollHeight - editor.clientHeight;
-                if (scrollableHeight <= 0) return; // No scrolling needed
+                if (scrollableHeight <= 0) return;
                 
                 const scrollPercentage = editor.scrollTop / scrollableHeight;
                 const previewScrollableHeight = preview.scrollHeight - preview.clientHeight;
@@ -5805,17 +5805,17 @@ function noteApp() {
                 if (previewScrollableHeight > 0) {
                     this.ui.isScrolling = true;
                     preview.scrollTop = scrollPercentage * previewScrollableHeight;
+                    setTimeout(() => {
+                        this.ui.isScrolling = false;
+                    }, CONFIG.SCROLL_SYNC_DELAY);
                 }
             };
             
             this._previewScrollHandler = () => {
-                if (this.ui.isScrolling) {
-                    this.ui.isScrolling = false;
-                    return;
-                }
+                if (this.ui.isScrolling) return;
                 
                 const scrollableHeight = preview.scrollHeight - preview.clientHeight;
-                if (scrollableHeight <= 0) return; // No scrolling needed
+                if (scrollableHeight <= 0) return;
                 
                 const scrollPercentage = preview.scrollTop / scrollableHeight;
                 const editorScrollableHeight = editor.scrollHeight - editor.clientHeight;
@@ -5823,6 +5823,9 @@ function noteApp() {
                 if (editorScrollableHeight > 0) {
                     this.ui.isScrolling = true;
                     editor.scrollTop = scrollPercentage * editorScrollableHeight;
+                    setTimeout(() => {
+                        this.ui.isScrolling = false;
+                    }, CONFIG.SCROLL_SYNC_DELAY);
                 }
             };
             
@@ -6275,12 +6278,14 @@ function noteApp() {
             event.preventDefault();
             
             const container = event.target.parentElement;
+            const HANDLE_WIDTH = 6; // Match CSS width of .split-resize-handle
             
             const resize = (e) => {
                 if (!this.ui.isResizingSplit) return;
                 
                 const containerRect = container.getBoundingClientRect();
-                const mouseX = e.clientX - containerRect.left;
+                // Center the handle on the mouse cursor by subtracting half the handle width
+                const mouseX = e.clientX - containerRect.left - (HANDLE_WIDTH / 2);
                 const percentage = (mouseX / containerRect.width) * 100;
                 
                 // Clamp between 20% and 80%
