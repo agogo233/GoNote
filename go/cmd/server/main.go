@@ -236,13 +236,16 @@ func setupRoutes(app *fiber.App, cfg *config.Config) *services.NoteService {
 	localeHandler := handlers.NewLocaleHandler(localeService, cfg)
 	graphHandler := handlers.NewGraphHandler(graphService, cfg)
 	systemHandler := handlers.NewSystemHandler(cfg)
+	systemHandler.SetReadinessDeps(noteService, searchIndex)
 	authHandler := handlers.NewAuthHandler(cfg)
 	backlinkService := services.NewBacklinkService(cfg.Storage.NotesDir)
 	statisticsService := services.NewStatisticsService(cfg.Storage.NotesDir)
 	statisticsHandler := handlers.NewStatisticsHandler(statisticsService, cfg)
 
 	// Public endpoints (no auth required)
-	app.Get("/health", systemHandler.HealthCheck)
+	app.Get("/health", systemHandler.HealthCheck)   // Legacy liveness probe
+	app.Get("/healthz", systemHandler.HealthCheck)  // Liveness probe
+	app.Get("/readyz", systemHandler.ReadinessCheck) // Readiness probe
 	app.Get("/sw.js", middleware.EndpointLimiterSimple(30), systemHandler.ServiceWorker)
 	app.Get("/api/themes", themeHandler.List)
 	app.Get("/api/themes/:id", themeHandler.Get)

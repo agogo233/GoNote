@@ -8,8 +8,8 @@
 > ## 修复状态
 > 已修复（commit 1d9b898）：S-4, S-5, S-6, S-7, S-8, S-9 — 编译零错误，799 测试全量通过
 > 已修复（commit 82a22d5）：I-1（per-path mutex + mtime 乐观锁 + 409 冲突响应）、I-15（多槽草稿 + dirty 追踪 + beforeunload + 409 冲突 banner）— 编译零错误，799 测试全量通过
-> 已修复（commit 待补）：I-6（原子写）、I-7（路径校验统一）、I-8（共享 token TTL + 原子写 + 坏文件备份告警）— 编译零错误，全量测试通过
-> 待修复：S-1, S-2, S-3, S-10, S-11, S-12, I-2~I-5, I-9~I-14, I-16, W-1~W-12
+> 已修复（commit 5815276）：I-6（原子写）、I-7（路径校验统一）、I-8（共享 token TTL + 原子写 + 坏文件备份告警）— 编译零错误，全量测试通过
+> 待修复：S-1, S-2, S-3, S-11, S-12, I-2~I-5, I-10~I-14, I-16, W-1~W-12
 
 ## 复核结果总览
 
@@ -138,17 +138,16 @@
 - **影响**：容器逃逸即 root；data 卷文件属主 root，宿主调权限麻烦。
 - **修复建议**：运行阶段创建 `gonote` 用户（uid 10001），`USER gonote`，chown `/app/data`。
 
-### S-10 `/health` 不检查任何依赖，scanner 死锁时仍返回 200
+### S-10 `/health` 不检查任何依赖，scanner 死锁时仍返回 200 ✅已修复
 
-- **状态**：确认成立
+- **状态**：确认成立 → 已修复
+- **修复说明**：拆分 `/healthz`（存活探针，保持原逻辑）与 `/readyz`（就绪探针，检查三项：notes_dir 可写 + scanner 首次扫描完成 + search index 已构建）；`SearchIndex` 新增 `buildDone atomic.Bool` + `IsReady()`，`NoteService` 新增 `IsScannerReady()`；Docker compose healthcheck 改用 `/readyz`，检测到依赖未就绪时返回 503
 - **证据**：`go/internal/handlers/system.go:22-29`
   ```go
   return c.JSON(models.HealthResponse{
       Status: "ok", App: h.config.App.Name, Version: h.config.App.Version,
   })
   ```
-- **影响**：K8s/Docker HEALTHCHECK 无法检测磁盘不可用/索引 panic/scanner 死锁等"假活"状态。
-- **修复建议**：拆分 `/healthz`（进程存活）与 `/readyz`（依赖就绪：notes_dir 可写、search index built、scanner alive）；deploy 文件 healthcheck 换 `/readyz`。
 
 ### S-11 前端 Markdown 渲染不 sanitize，存在 XSS
 
@@ -239,13 +238,13 @@
 - **证据**：`go/internal/services/share.go:62-76`（非原子写）+ L53-57 静默空 map + `models.ShareToken` 无 `expires_at`
 - **修复建议**：加 `expires_at` 字段，加载时过滤过期；原子写；损坏时备份并告警而非静默清空。
 
-### I-9 `StopBackgroundScanner` 不等待 goroutine 退出
+### I-9 `StopBackgroundScanner` 不等待 goroutine 退出 ✅已修复
 
-- **状态**：确认成立
+- **状态**：确认成立 → 已修复
+- **修复说明**：NoteService 新增 `scannerDone chan struct{}`，goroutine 退出时 `defer close`；`StopBackgroundScanner` 在 `close(s.stopScanner)` 后以 5s 超时等待 `<-s.scannerDone`，与 `cache.go` `StopCleanup` 的 `cleanupDone` 模式一致；新增 `IsScannerReady()` 供 `/readyz` 使用
 - **证据**：
   - `go/internal/services/notes.go:643-651` 仅 `close(s.stopScanner)`，无 done channel
   - 对比 `cache.go:255-279` `StopCleanup` 有 `cleanupDone` + 5s 超时等待
-- **修复建议**：引入 `scannerDone chan struct{}` + `sync.WaitGroup`；`Stop` 中 `<-scannerDone` 带超时。
 
 ### I-10 SearchIndex 写锁内做磁盘 IO，锁持有时间过长
 
@@ -350,10 +349,10 @@
 11. **S-7** 搜索倒排改造（前缀 tree / sort.Search 二分）✅已修复
 12. **S-6** 后台扫描同步刷新 SearchIndex（注入引用）✅已修复
 13. **S-8** MoveNote 改为"先 rename 再 update backlinks"+补偿回滚 ✅已修复
-14. **S-10** /healthz + /readyz 拆分
+14. **S-10** /healthz + /readyz 拆分 ✅已修复
 15. **I-1** 并发写入加 mutex + mtime 乐观锁 ✅已修复
 16. **I-2** Cache 分片或 RLock 优化
-17. **I-9** scanner 引入 WaitGroup + done channel
+17. **I-9** scanner 引入 WaitGroup + done channel ✅已修复
 18. **I-10** SearchIndex 锁外读盘
 19. **I-5** WebSocket 读超时 + Origin + ReadLimit
 

@@ -226,6 +226,14 @@ type HealthResponse struct {
 	Version string `json:"version"`
 }
 
+// ReadinessResponse represents detailed readiness check response
+type ReadinessResponse struct {
+	Status     string            `json:"status"`
+	App        string            `json:"app"`
+	Version    string            `json:"version"`
+	Checks     map[string]string `json:"checks"`
+}
+
 // CacheEntry represents a cached scan result
 type CacheEntry struct {
 	CachedAt time.Time

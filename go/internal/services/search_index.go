@@ -39,6 +39,8 @@ type SearchIndex struct {
 	sortedTitleTerms   []string
 	termsSortedDirty   atomic.Bool
 	titleSortedDirty   atomic.Bool
+
+	buildDone atomic.Bool // 标记 BuildIndex 是否至少完成一次（用于 /readyz）
 }
 
 // TitleEntry represents a title match with score
@@ -101,6 +103,7 @@ func (si *SearchIndex) BuildIndex() error {
 	si.titleSortedDirty.Store(true)
 	si.mu.Unlock()
 
+	si.buildDone.Store(true)
 	return nil
 }
 
@@ -1206,6 +1209,11 @@ func (si *SearchIndex) GetIndexSize() int {
 	defer si.mu.RUnlock()
 
 	return len(si.index)
+}
+
+// IsReady 返回搜索索引是否至少已完成一次完整构建（用于 /readyz 健康检查）。
+func (si *SearchIndex) IsReady() bool {
+	return si.buildDone.Load()
 }
 
 // extractTitle extracts the title from note content or derives it from the filename

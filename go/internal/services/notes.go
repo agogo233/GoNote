@@ -32,6 +32,7 @@ type NoteService struct {
 	tagCache       *Cache
 	scanInterval   time.Duration
 	stopScanner    chan struct{}
+	scannerDone    chan struct{}  // Closed when scanner goroutine exits
 	scanTrigger    chan struct{}  // Trigger immediate scan
 	ready          chan struct{}  // Closed when first scan completes
 	onScanComplete func()         // Callback after scan completes (for WebSocket broadcast)
@@ -82,6 +83,7 @@ func NewNoteServiceWithScanner(notesDir string, cacheTTL time.Duration, cacheCap
 		tagCache:     NewCache(cacheCapacity, cacheTTL),
 		scanInterval: scanInterval,
 		stopScanner:  make(chan struct{}),
+		scannerDone:  make(chan struct{}),
 		scanTrigger:  make(chan struct{}, 1),
 		ready:        make(chan struct{}),
 	}
@@ -647,6 +649,7 @@ func (s *NoteService) StopCacheCleanup() {
 // If a panic occurs, the scanner will automatically restart after a delay.
 func (s *NoteService) StartBackgroundScanner() {
 	go func() {
+		defer close(s.scannerDone)
 		// 初始扫描：无论 panic 与否都关闭 ready，避免 WaitForReady 永久阻塞
 		func() {
 			defer close(s.ready) // 必须先于 recover 的 defer 注册，确保 panic 时仍执行
@@ -692,7 +695,7 @@ func (s *NoteService) StartBackgroundScanner() {
 	}()
 }
 
-// StopBackgroundScanner stops the background scanner.
+// StopBackgroundScanner stops the background scanner and waits for it to exit.
 // This should be called during application shutdown.
 // If background scanner is not enabled, this is a no-op.
 func (s *NoteService) StopBackgroundScanner() {
@@ -700,6 +703,12 @@ func (s *NoteService) StopBackgroundScanner() {
 		return
 	}
 	close(s.stopScanner)
+	select {
+	case <-s.scannerDone:
+		// Scanner exited cleanly
+	case <-time.After(5 * time.Second):
+		// Timeout — proceed with shutdown anyway
+	}
 }
 
 // TriggerScan triggers an immediate background scan.
@@ -714,6 +723,20 @@ func (s *NoteService) TriggerScan() {
 		// Scan triggered
 	default:
 		// Scan already pending, skip
+	}
+}
+
+// IsScannerReady 返回后台扫描器是否已完成首次扫描（初始就绪）。
+// 若未启用扫描器（无后台 goroutine），返回 true（视为始终就绪）。
+func (s *NoteService) IsScannerReady() bool {
+	if s.ready == nil {
+		return true
+	}
+	select {
+	case <-s.ready:
+		return true
+	default:
+		return false
 	}
 }
 
