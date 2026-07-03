@@ -5362,7 +5362,7 @@ function noteApp() {
                             }
                         }).join('/');
                         
-                        const safeAlt = alt.replace(/"/g, '&quot;');
+                        const safeAlt = self.escapeHtml(alt).replace(/"/g, '&quot;');
                         const mediaSrc = `/api/media/${encodedPath}`;
                         const mediaType = self.getMediaType(filename);
                         
@@ -5479,11 +5479,14 @@ function noteApp() {
             
             // Parse markdown
             let html = marked.parse(contentToRender);
-            
+
             // Post-process: Add target="_blank" to external links and title attributes to images
-            // Parse as DOM to safely manipulate
+            // Parse as DOM to safely manipulate (DOMPurify sanitizes marked output to prevent XSS)
             const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = html;
+            tempDiv.innerHTML = DOMPurify.sanitize(html, {
+                ADD_TAGS: ['iframe'],
+                ADD_ATTR: ['target', 'rel', 'controls', 'preload', 'poster', 'allowfullscreen']
+            });
             
             // Find all links
             const links = tempDiv.querySelectorAll('a');
@@ -5528,7 +5531,7 @@ function noteApp() {
                     // Check if this is non-image media and convert to appropriate element
                     const mediaType = self.getMediaType(src);
                     const altText = img.getAttribute('alt') || src.split('/').pop().replace(/\.[^/.]+$/, '');
-                    const safeAlt = altText.replace(/"/g, '&quot;');
+                    const safeAlt = self.escapeHtml(altText).replace(/"/g, '&quot;');
                     
                     // Only convert LOCAL media to embedded elements (security)
                     // External non-image media gets styled links instead

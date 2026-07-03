@@ -13,7 +13,8 @@
 > 已修复（commit 2f2dd77）：I-2（Cache.Get RLock 优化）、I-3（合并双 tag 缓存）、I-10（反向索引 + 锁外读盘）— 编译零错误，全量测试通过
 > 已修复（commit 75ce890）：I-4（Fiber ProxyHeader 使 c.IP() 支持 X-Forwarded-For）、I-5（WebSocket Origin 校验 + ReadLimit/ReadDeadline + 连接上限）— 编译零错误，811 测试全量通过
 > 已修复（commit fb0f1f4）：S-2（EndpointLimiter 与全局开关解耦）、S-3（共享页 title EscapeString + DOMPurify 清洗 marked 输出）— 编译零错误，811 测试全量通过
-> 待修复：S-1, S-11, S-12, I-11~I-14, I-16, W-1~W-12
+> 已修复（commit 待补）：S-11（前端 DOMPurify 清洗 marked 输出 + safeAlt 完整转义 + E2E 回归测试）— 编译零错误，811 测试全量通过
+> 待修复：S-1, S-12, I-11~I-14, I-16, W-1~W-12
 
 ## 复核结果总览
 
@@ -153,15 +154,15 @@
   })
   ```
 
-### S-11 前端 Markdown 渲染不 sanitize，存在 XSS
+### S-11 前端 Markdown 渲染不 sanitize，存在 XSS ✅已修复
 
-- **状态**：确认成立
+- **状态**：确认成立 → 已修复
 - **证据**：
   - `shared/frontend/app.js:5263-5278` `marked.setOptions({ breaks, gfm, renderer, tokenizer, highlight })` 无 sanitize
   - `grep DOMPurify shared/frontend` 零命中
   - `app.js:5286` `tempDiv.innerHTML = html` 直接注入 marked 输出
 - **影响**：笔记内容含 `<script>`、`<img onerror>` 等原始 HTML 会被浏览器执行。
-- **修复建议**：引入 DOMPurify 在 `marked.parse` 后清洗：`tempDiv.innerHTML = DOMPurify.sanitize(marked.parse(content))`。
+- **修复说明**：① `index.html` 加载 DOMPurify 3.2.4；② `app.js` `marked.parse` 输出经 `DOMPurify.sanitize(html, {ADD_TAGS:['iframe'], ADD_ATTR:[...]})` 清洗后注入；③ 两处 `safeAlt`（5365/5534）从仅转义引号升级为 `self.escapeHtml(alt).replace(/"/g,""")`，防止属性边界逃逸；④ 新增 `tests/e2e/security/xss-sanitization.spec.ts` 三例回归（script 标签剥离、img onerror 中和、iframe javascript: 拦截）。
 
 ### S-12 回收站/版本历史/定时备份声称但完全未实现
 
@@ -343,7 +344,7 @@
 4. **S-5** 注册 `recover.New()` 中间件 ✅已修复
 5. **S-4** scanner panic 加 `defer close(s.ready)` ✅已修复
 6. **S-9** 容器改非 root 用户 ✅已修复
-7. **S-11** 前端 DOMPurify 清洗 marked 输出
+7. **S-11** 前端 DOMPurify 清洗 marked 输出 ✅已修复
 8. **I-6** 文件写入原子化 ✅已修复
 9. **I-7** `SaveUploadedImage` 路径校验统一 ✅已修复
 10. **I-13** core-e2e env 时机修复
