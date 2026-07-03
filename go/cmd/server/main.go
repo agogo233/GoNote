@@ -15,6 +15,7 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/compress"
 	"github.com/gofiber/fiber/v2/middleware/csrf"
 	"github.com/gofiber/fiber/v2/middleware/logger"
+	fiberrecover "github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/gofiber/fiber/v2/utils"
 
 	"gonote/internal/models/config"
@@ -87,6 +88,9 @@ func main() {
 	})
 
 	// Middleware
+	// recover 必须放在最前：捕获后续所有中间件/handler 的 panic，避免连接异常断开
+	app.Use(fiberrecover.New())
+
 	app.Use(compress.New(compress.Config{
 		Level: compress.LevelBestSpeed,
 	}))
@@ -192,6 +196,7 @@ func setupRoutes(app *fiber.App, cfg *config.Config) *services.NoteService {
 	
 	searchService := services.NewSearchService(cfg.Storage.NotesDir, noteService)
 	searchIndex := services.NewSearchIndex(cfg.Storage.NotesDir, noteService)
+	noteService.SetSearchIndex(searchIndex) // S-6: 注入 SearchIndex 以便后台扫描增量同步外部写入
 	tagService := services.NewTagService(noteService, cfg.Storage.NotesDir)
 	templateService := services.NewTemplateService(cfg.Storage.NotesDir)
 	shareService := services.NewShareService(cfg.Storage.NotesDir)

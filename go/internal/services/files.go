@@ -118,6 +118,8 @@ func DeleteFolder(notesDir, folderPath string) error {
 }
 
 // MoveFolder moves a folder to a new location
+// 顺序：先 rename 成功后再更新 folder 内所有 wikilinks 反向引用，
+// backlinks 改写失败时回滚 rename，避免出现"链接已改但目录没搬"的不可恢复状态。
 func MoveFolder(notesDir, oldPath, newPath string) error {
 	oldFull := filepath.Join(notesDir, oldPath)
 	newFull := filepath.Join(notesDir, newPath)
@@ -142,7 +144,21 @@ func MoveFolder(notesDir, oldPath, newPath string) error {
 		return err
 	}
 
-	return os.Rename(oldFull, newFull)
+	// 1) 先 rename：失败直接返回，无任何副作用
+	if err := os.Rename(oldFull, newFull); err != nil {
+		return err
+	}
+
+	// 2) rename 成功后更新所有指向该文件夹内笔记的 wikilinks；失败则回滚 rename
+	backlinkService := NewBacklinkService(notesDir)
+	if _, err := backlinkService.UpdateFolderBacklinks(oldPath, newPath); err != nil {
+		if rbErr := os.Rename(newFull, oldFull); rbErr != nil {
+			return fmt.Errorf("folder moved but backlink update failed (%v), and rollback also failed (%v)", err, rbErr)
+		}
+		return fmt.Errorf("folder moved but backlink update failed, rolled back rename: %w", err)
+	}
+
+	return nil
 }
 
 // RenameFolder renames a folder (alias for MoveFolder)

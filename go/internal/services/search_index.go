@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"gonote/internal/models"
@@ -31,6 +32,13 @@ type SearchIndex struct {
 	cache         *Cache
 	noteService   *NoteService   // Shared NoteService for reusing cache
 	searchService *SearchService // SearchService for disk-scan fallback
+
+	// sortedTerms / sortedTitleTerms: 前缀查询的二分加速结构。
+	// 写点用 atomic.Bool 标 dirty，查询入口若 dirty 则持写锁重建一次后转 RLock。
+	sortedTerms        []string
+	sortedTitleTerms   []string
+	termsSortedDirty   atomic.Bool
+	titleSortedDirty   atomic.Bool
 }
 
 // TitleEntry represents a title match with score
@@ -89,9 +97,47 @@ func (si *SearchIndex) BuildIndex() error {
 	si.index = newIndex
 	si.titleIndex = newTitleIndex
 	si.titleMap = newTitleMap
+	si.termsSortedDirty.Store(true)
+	si.titleSortedDirty.Store(true)
 	si.mu.Unlock()
 
 	return nil
+}
+
+// ensureTermsSorted 在 dirty 时重建有序 term 切片。调用方必须持有写锁。
+func (si *SearchIndex) ensureTermsSorted() {
+	if si.termsSortedDirty.Load() {
+		si.sortedTerms = si.sortedTerms[:0]
+		for term := range si.index {
+			si.sortedTerms = append(si.sortedTerms, term)
+		}
+		sort.Strings(si.sortedTerms)
+		si.termsSortedDirty.Store(false)
+	}
+}
+
+// ensureTitleTermsSorted 同上，作用于 titleIndex。
+func (si *SearchIndex) ensureTitleTermsSorted() {
+	if si.titleSortedDirty.Load() {
+		si.sortedTitleTerms = si.sortedTitleTerms[:0]
+		for term := range si.titleIndex {
+			si.sortedTitleTerms = append(si.sortedTitleTerms, term)
+		}
+		sort.Strings(si.sortedTitleTerms)
+		si.titleSortedDirty.Store(false)
+	}
+}
+
+// prepareSortedTerms 在查询入口前调用：若 dirty 则持写锁重建一次再释放。
+// 避免在 RLock 内读取 sortedTerms 时被并发写者改动导致越界/dirty 误判。
+// 调用方需自行重新 RLock；写者之后仍可再标 dirty，本次查询用 snapshot 即可一致。
+func (si *SearchIndex) prepareSortedTerms() {
+	if si.termsSortedDirty.Load() || si.titleSortedDirty.Load() {
+		si.mu.Lock()
+		si.ensureTermsSorted()
+		si.ensureTitleTermsSorted()
+		si.mu.Unlock()
+	}
 }
 
 // indexNoteTo indexes a single note into the provided index map
@@ -234,6 +280,8 @@ func (si *SearchIndex) indexNote(notePath string) error {
 		})
 	}
 
+	si.termsSortedDirty.Store(true)
+	si.titleSortedDirty.Store(true)
 	return nil
 }
 
@@ -286,6 +334,8 @@ func (si *SearchIndex) indexNoteFresh(notePath string) error {
 		})
 	}
 
+	si.termsSortedDirty.Store(true)
+	si.titleSortedDirty.Store(true)
 	return nil
 }
 
@@ -341,6 +391,8 @@ func (si *SearchIndex) removeNoteFromIndex(notePath string) {
 	}
 
 	delete(si.titleMap, notePath)
+	si.termsSortedDirty.Store(true)
+	si.titleSortedDirty.Store(true)
 }
 
 // Search performs a search using the inverted index
@@ -348,6 +400,7 @@ func (si *SearchIndex) removeNoteFromIndex(notePath string) {
 // Supports prefix matching for partial searches (e.g., "gol" matches "golang")
 // CJK and non-CJK queries use the same unified path: tokenize → prefix match → verify
 func (si *SearchIndex) Search(query string) ([]models.SearchResult, error) {
+	si.prepareSortedTerms()
 	si.mu.RLock()
 	defer si.mu.RUnlock()
 
@@ -442,42 +495,53 @@ func (si *SearchIndex) searchNotesWithPattern(notes []models.Note, pattern *rege
 	return results, nil
 }
 
-// findNotesWithPrefix finds all notes that contain terms starting with the given prefix
+// findNotesWithPrefix finds all notes that contain terms starting with the given prefix.
+// 使用 sortedTerms 二分定位前缀区间，避免遍历整张 term map。
+// 调用方必须持有锁；若 dirty 调用方必须先 ensureTermsSorted（持写锁）。
 func (si *SearchIndex) findNotesWithPrefix(prefix string) map[string]bool {
 	notes := make(map[string]bool)
-	
-	for term, entries := range si.index {
-		if strings.HasPrefix(term, prefix) {
-			for e := entries.Front(); e != nil; e = e.Next() {
-				entry := e.Value.(IndexEntry)
-				notes[entry.NotePath] = true
-			}
-		}
+	if len(si.sortedTerms) == 0 || prefix == "" {
+		return notes
 	}
-	
+	// 二分定位第一个 >= prefix 的 term（前缀区间的下界）
+	i := sort.SearchStrings(si.sortedTerms, prefix)
+	for i < len(si.sortedTerms) {
+		term := si.sortedTerms[i]
+		if !strings.HasPrefix(term, prefix) {
+			break // 离开前缀区间
+		}
+		entries := si.index[term]
+		for e := entries.Front(); e != nil; e = e.Next() {
+			notes[e.Value.(IndexEntry).NotePath] = true
+		}
+		i++
+	}
 	return notes
 }
 
-// noteContainsTermsWithPrefix checks if a note contains all terms (with prefix matching)
+// noteContainsTermsWithPrefix checks if a note contains all terms (with prefix matching).
+// 复用 findNotesWithPrefix 取每个 query term 的 postings，再判定 notePath 命中。
 func (si *SearchIndex) noteContainsTermsWithPrefix(notePath string, terms []string) bool {
 	for _, term := range terms {
-		found := false
-		// Check if any indexed term starts with this query term
-		for indexedTerm, entries := range si.index {
-			if strings.HasPrefix(indexedTerm, term) {
-				for e := entries.Front(); e != nil; e = e.Next() {
-					entry := e.Value.(IndexEntry)
-					if entry.NotePath == notePath {
-						found = true
-						break
-					}
-				}
-			}
-			if found {
+		hit := false
+		i := sort.SearchStrings(si.sortedTerms, term)
+		for i < len(si.sortedTerms) {
+			indexed := si.sortedTerms[i]
+			if !strings.HasPrefix(indexed, term) {
 				break
 			}
+			for e := si.index[indexed].Front(); e != nil; e = e.Next() {
+				if e.Value.(IndexEntry).NotePath == notePath {
+					hit = true
+					break
+				}
+			}
+			if hit {
+				break
+			}
+			i++
 		}
-		if !found {
+		if !hit {
 			return false
 		}
 	}
@@ -486,6 +550,7 @@ func (si *SearchIndex) noteContainsTermsWithPrefix(notePath string, terms []stri
 
 // SearchByTitle searches only note titles with prefix and fuzzy matching
 func (si *SearchIndex) SearchByTitle(query string) ([]models.SearchResult, error) {
+	si.prepareSortedTerms()
 	si.mu.RLock()
 	defer si.mu.RUnlock()
 
@@ -707,27 +772,34 @@ func (si *SearchIndex) searchTitleByPrefix(prefix string) ([]models.SearchResult
 
 	prefixLower := strings.ToLower(prefix)
 
-	for term, entries := range si.titleIndex {
-		if strings.HasPrefix(term, prefixLower) {
-			for e := entries.Front(); e != nil; e = e.Next() {
-				entry := e.Value.(TitleEntry)
-				if seen[entry.NotePath] {
-					continue
-				}
-				seen[entry.NotePath] = true
-
-				title := entry.Title
-				score := si.calculateTitleScore(title, prefixLower)
-				if score == 0 {
-					score = si.calculateTitleScore(extractFileName(entry.NotePath), prefixLower)
-				}
-				matches = append(matches, titleScore{
-					notePath: entry.NotePath,
-					title:    title,
-					score:    score,
-				})
-			}
+	// 调用方（SearchByTitle）已在入口处 prepareSortedTerms 重建过，
+	// 这里直接用 sortedTitleTerms 二分；持 RLock 阶段不再自行重建。
+	i := sort.SearchStrings(si.sortedTitleTerms, prefixLower)
+	for i < len(si.sortedTitleTerms) {
+		term := si.sortedTitleTerms[i]
+		if !strings.HasPrefix(term, prefixLower) {
+			break
 		}
+		entries := si.titleIndex[term]
+		for e := entries.Front(); e != nil; e = e.Next() {
+			entry := e.Value.(TitleEntry)
+			if seen[entry.NotePath] {
+				continue
+			}
+			seen[entry.NotePath] = true
+
+			title := entry.Title
+			score := si.calculateTitleScore(title, prefixLower)
+			if score == 0 {
+				score = si.calculateTitleScore(extractFileName(entry.NotePath), prefixLower)
+			}
+			matches = append(matches, titleScore{
+				notePath: entry.NotePath,
+				title:    title,
+				score:    score,
+			})
+		}
+		i++
 	}
 
 	// Sort by score (stable sort for deterministic order)
@@ -752,6 +824,7 @@ func (si *SearchIndex) searchTitleByPrefix(prefix string) ([]models.SearchResult
 
 // SearchSmart performs smart search: title matches first, content matches as fallback
 func (si *SearchIndex) SearchSmart(query string) ([]models.SearchResult, error) {
+	si.prepareSortedTerms()
 	si.mu.RLock()
 	defer si.mu.RUnlock()
 

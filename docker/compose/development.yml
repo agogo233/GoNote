@@ -4,10 +4,12 @@ services:
       context: ../..
       dockerfile: docker/go/Dockerfile
     container_name: gonote-go
+    # 以非 root 用户运行（与 Dockerfile 中 USER gonote 双保险）
+    user: "10001:10001"
     ports:
       - "9000:9000"
     volumes:
-# 必需：笔记数据目录
+# 必需：笔记数据目录（建议 chown -R 10001:10001 ./data 或按上方 user 修改 uid）
        - ./data:/app/data
        # 可选：取消注释以自定义（文件/目录必须存在！）
        # - ./config.yaml:/app/config.yaml

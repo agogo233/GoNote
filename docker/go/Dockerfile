@@ -56,6 +56,11 @@ COPY go/config.yaml ./config.yaml
 # Create data directory
 RUN mkdir -p /app/data
 
+# 创建非 root 用户并移交 /app 属主，避免容器以 root 运行（容器逃逸即 root）
+RUN addgroup -g 10001 -S gonote && \
+    adduser  -u 10001 -S -G gonote gonote && \
+    chown -R gonote:gonote /app
+
 # 设置环境变量
 # Set environment variables
 ENV PORT=9000
@@ -63,6 +68,9 @@ ENV PORT=9000
 # 暴露端口
 # Expose port
 EXPOSE 9000
+
+# 切换到非 root 用户运行
+USER gonote
 
 # 运行应用
 # Run the application

@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"gonote/internal/models"
@@ -31,6 +32,8 @@ type NoteService struct {
 	scanTrigger    chan struct{}  // Trigger immediate scan
 	ready          chan struct{}  // Closed when first scan completes
 	onScanComplete func()         // Callback after scan completes (for WebSocket broadcast)
+	searchIndex    *SearchIndex   // 注入：performScan 增量同步搜索索引
+	fileMtimes     sync.Map       // path → time.Time（已知 mtime 的 snapshot），用于增量同步
 }
 
 type scanCacheEntry struct {
@@ -83,6 +86,12 @@ func NewNoteServiceWithScanner(notesDir string, cacheTTL time.Duration, cacheCap
 // SetOnScanComplete sets a callback function to be called after each scan completes
 func (s *NoteService) SetOnScanComplete(callback func()) {
 	s.onScanComplete = callback
+}
+
+// SetSearchIndex 注入 SearchIndex 引用。用于在 performScan 中增量同步外部写入的笔记到搜索索引。
+// 采用 setter 而非构造参数，避免与 SearchIndex 构造形成循环依赖（SearchIndex 构造也接收 NoteService）。
+func (s *NoteService) SetSearchIndex(si *SearchIndex) {
+	s.searchIndex = si
 }
 
 // ScanNotes scans all notes in the notes directory.
@@ -307,6 +316,8 @@ func (s *NoteService) DeleteNote(notePath string) error {
 }
 
 // MoveNote moves a note to a new location and updates all wikilink references
+// 顺序：先 rename（可逆性差但失败无副作用），成功后再改 backlinks；
+// backlinks 改写失败时回滚 rename，避免出现"链接已改但文件没搬"的不可恢复状态。
 func (s *NoteService) MoveNote(oldPath, newPath string) error {
 	oldFull := filepath.Join(s.notesDir, oldPath)
 	newFull := filepath.Join(s.notesDir, newPath)
@@ -327,15 +338,26 @@ func (s *NoteService) MoveNote(oldPath, newPath string) error {
 		return err
 	}
 
-	// Update all wikilink references before moving
+	// 1) 先 rename：失败直接返回，无任何副作用
+	if err := os.Rename(oldFull, newFull); err != nil {
+		return err
+	}
+
+	// 2) rename 成功后改 backlinks；失败则回滚 rename
 	backlinkService := NewBacklinkService(s.notesDir)
-	backlinkService.UpdateAllBacklinks(oldPath, newPath)
+	if _, err := backlinkService.UpdateAllBacklinks(oldPath, newPath); err != nil {
+		// 补偿：把文件搬回去，尽量恢复原状
+		if rbErr := os.Rename(newFull, oldFull); rbErr != nil {
+			return fmt.Errorf("move succeeded but backlink update failed (%v), and rollback also failed (%v)", err, rbErr)
+		}
+		return fmt.Errorf("move succeeded but backlink update failed, rolled back rename: %w", err)
+	}
 
 	// Fine-grained cache invalidation for both paths
 	s.invalidateNoteCache(oldPath)
 	s.invalidateNoteCache(newPath)
 
-	return os.Rename(oldFull, newFull)
+	return nil
 }
 
 // NoteExists checks if a note exists
@@ -595,15 +617,15 @@ func (s *NoteService) StopCacheCleanup() {
 // If a panic occurs, the scanner will automatically restart after a delay.
 func (s *NoteService) StartBackgroundScanner() {
 	go func() {
-		// Initial scan with panic recovery
+		// 初始扫描：无论 panic 与否都关闭 ready，避免 WaitForReady 永久阻塞
 		func() {
+			defer close(s.ready) // 必须先于 recover 的 defer 注册，确保 panic 时仍执行
 			defer func() {
 				if r := recover(); r != nil {
 					fmt.Printf("Background scanner panic recovered: %v\n", r)
 				}
 			}()
 			s.performScan()
-			close(s.ready) // Signal that first scan is complete
 		}()
 
 		ticker := time.NewTicker(s.scanInterval)
@@ -668,31 +690,86 @@ func (s *NoteService) TriggerScan() {
 // performScan executes the actual scan and updates cache
 func (s *NoteService) performScan() {
 	// Scan both with and without media to populate both cache entries
-	s.scanAndUpdate(true)  // Include media
-	s.scanAndUpdate(false) // Exclude media
+	s.scanAndUpdate(true) // Include media
+	notes := s.scanAndUpdate(false) // Exclude media（仅含 markdown）
 
-	// Notify listeners (WebSocket broadcast)
+	// 增量同步搜索索引：将扫描得到的 markdown 笔记集合与上次 snapshot 对比，
+	// 对新增/变更调 UpdateIndex，对消失调 RemoveFromIndex。
+	// 复用 scanAndUpdate 已读的 notes 列表，避免二次 stat。
+	s.syncSearchIndex(notes)
+
 	if s.onScanComplete != nil {
 		s.onScanComplete()
 	}
 }
 
+// syncSearchIndex 增量同步搜索索引。currentNotes 为本次扫描得到的 markdown 笔记列表
+// （调用方应传入 includeMedia=false 的扫描结果）。基于 mtime 做差分，避免每次重建。
+func (s *NoteService) syncSearchIndex(currentNotes []models.Note) {
+	if s.searchIndex == nil {
+		return
+	}
+
+	// 当前路径 → mtime，以及所有路径集合
+	seen := make(map[string]time.Time, len(currentNotes))
+	for _, n := range currentNotes {
+		// doScan 只对 markdown 计算 tags；媒体文件 Type 为 mediaType。这里只需 markdown。
+		if n.Type != "note" {
+			continue
+		}
+		mtime, err := time.Parse(time.RFC3339, n.Modified)
+		if err != nil {
+			continue
+		}
+		seen[n.Path] = mtime
+	}
+
+	// 1) 新增/变更：相对 fileMtimes snapshot，mtime 不同或新路径
+	for path, mtime := range seen {
+		var prev time.Time
+		if v, ok := s.fileMtimes.Load(path); ok {
+			prev, _ = v.(time.Time)
+		}
+		if !prev.Equal(mtime) {
+			if err := s.searchIndex.UpdateIndex(path); err == nil {
+				s.fileMtimes.Store(path, mtime)
+			}
+		}
+	}
+
+	// 2) 消失：之前在 snapshot 现在 seen 中没有 → 移除
+	s.fileMtimes.Range(func(key, _ any) bool {
+		path, _ := key.(string)
+		if _, ok := seen[path]; !ok {
+			s.searchIndex.RemoveFromIndex(path)
+			s.fileMtimes.Delete(path)
+		}
+		return true
+	})
+}
+
 // scanAndUpdate performs the scan and updates the cache
-func (s *NoteService) scanAndUpdate(includeMedia bool) {
+func (s *NoteService) scanAndUpdate(includeMedia bool) []models.Note {
 	notes, folders := s.doScan(includeMedia)
 
 	cacheKey := fmt.Sprintf("%s:%v", cachePrefixNotesList, includeMedia)
 	s.cache.Set(cacheKey, &scanCacheEntry{Notes: notes, Folders: folders})
+	return notes
 }
 
 // WaitForReady blocks until the first scan completes.
 // This ensures API requests have data available.
 // If background scanner is not enabled (ready is nil), returns immediately.
+// 带 30s 超时 fallback：即便 ready 未关闭也避免请求永久挂死
 func (s *NoteService) WaitForReady() {
 	if s.ready == nil {
 		return
 	}
-	<-s.ready
+	select {
+	case <-s.ready:
+	case <-time.After(30 * time.Second):
+		fmt.Printf("Warn: WaitForReady timed out after 30s, serving possibly stale data\n")
+	}
 }
 
 // IsReady returns true if the first scan has completed.
