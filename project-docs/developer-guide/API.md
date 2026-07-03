@@ -51,7 +51,7 @@ GET /api/notes?limit=50&page=1
 Returns all notes with their metadata and folder structure. Supports pagination.
 
 **Optional query parameters:**
-- `limit` - Notes per page (default: 10000, use with `page` for pagination)
+- `limit` - Notes per page (default: 50, use with `page` for pagination)
 - `page` - Page number (default: 1)
 - `include_media` - Include media notes (`true`/`false`, default: `false`)
 

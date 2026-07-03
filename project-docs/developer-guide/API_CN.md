@@ -18,18 +18,26 @@ GET /api/notes
 
 ```json
 {
-  "success": true,
   "notes": [
     {
-      "path": "welcome.md",
       "name": "welcome",
+      "path": "welcome.md",
       "folder": "",
-      "title": "欢迎",
-      "tags": ["getting-started"],
-      "modified": "2025-01-15T10:30:00+08:00"
+      "modified": "2025-01-15T10:30:00+08:00",
+      "size": 1234,
+      "type": "md",
+      "tags": ["getting-started"]
     }
   ],
-  "folders": ["projects", "archive"]
+  "folders": ["projects", "archive"],
+  "pagination": {
+    "page": 1,
+    "limit": 50,
+    "total": 10,
+    "total_pages": 1,
+    "has_next": false,
+    "has_prev": false
+  }
 }
 ```
 
@@ -63,13 +71,13 @@ GET /api/notes/{note_path}
 
 ```json
 {
-  "success": true,
   "path": "tutorials/getting-started.md",
   "content": "# 快速开始\n\n本文档将帮助您...",
   "metadata": {
-    "title": "快速开始",
-    "tags": ["tutorial", "basics"],
-    "modified": "2025-01-15T14:20:00+08:00"
+    "created": "",
+    "modified": "2025-01-15T14:20:00+08:00",
+    "size": 1234,
+    "lines": 10
   }
 }
 ```
@@ -521,24 +529,37 @@ GET /api/search?q={query}
 | 参数名 | 类型 | 必填 | 说明 |
 |--------|------|------|------|
 | q | string | 是 | 搜索关键词 |
-| limit | integer | 否 | 返回结果数量，默认 50 |
-| offset | integer | 否 | 分页偏移量，默认 0 |
+| mode | string | 否 | 搜索模式（`full`、`title`、`smart`，默认 `full`） |
+| page | integer | 否 | 页码，默认 1 |
+| limit | integer | 否 | 每页结果数，默认 50 |
 
 **响应 (Response):**
 
 ```json
 {
-  "success": true,
-  "query": "api",
-  "total": 3,
   "results": [
     {
+      "name": "api-overview",
       "path": "api-overview.md",
-      "title": "API 概览",
-      "snippet": "本文档列出了所有可用的 REST API 端点...",
+      "folder": "",
+      "type": "md",
+      "matches": [
+        {
+          "line_number": 10,
+          "context": "...<mark>api</mark> overview..."
+        }
+      ],
       "score": 0.95
     }
-  ]
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 10,
+    "total": 3,
+    "total_pages": 1,
+    "has_next": false,
+    "has_prev": false
+  }
 }
 ```
 
@@ -549,7 +570,7 @@ GET /api/search?q={query}
 curl "http://localhost:9000/api/search?q=authentication"
 
 # 限制结果数量
-curl "http://localhost:9000/api/search?q=config&limit=10"
+curl "http://localhost:9000/api/search?q=config&page=1&limit=10"
 ```
 
 ---
@@ -711,10 +732,9 @@ GET /health
 
 ```json
 {
-  "status": "healthy",
-  "timestamp": "2025-01-15T14:30:00+08:00",
-  "version": "1.5.0",
-  "uptime_seconds": 86400
+  "status": "ok",
+  "app": "GoNote",
+  "version": "0.25.0"
 }
 ```
 

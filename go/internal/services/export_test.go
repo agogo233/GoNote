@@ -458,6 +458,7 @@ $E = mc^2$
 	assert.Contains(t, html, "<!DOCTYPE html>")
 	assert.Contains(t, html, "Test Note")
 	assert.Contains(t, html, "marked.parse")
+	assert.Contains(t, html, "DOMPurify.sanitize")
 	assert.Contains(t, html, "MathJax")
 	assert.Contains(t, html, "mermaid")
 	assert.Contains(t, html, "font-family: sans-serif")

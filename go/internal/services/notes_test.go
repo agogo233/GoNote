@@ -553,3 +553,44 @@ func TestBackgroundScanner(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, notes, 1)
 }
+
+func TestSaveNoteWithCheck_OptimisticLockConflict(t *testing.T) {
+	tmpDir := t.TempDir()
+	svc := NewNoteService(tmpDir)
+
+	notePath := "test.md"
+	content1 := "# Version 1"
+
+	// First save: create note (no knownMtime → skip check)
+	err := svc.SaveNoteWithCheck(notePath, content1, "")
+	require.NoError(t, err)
+
+	// Guarantee mtime will differ on next write
+	time.Sleep(10 * time.Millisecond)
+
+	// Get current mtime from the saved file
+	fullPath := filepath.Join(tmpDir, notePath)
+	info, err := os.Stat(fullPath)
+	require.NoError(t, err)
+	goodMtime := info.ModTime().UTC().Format(time.RFC3339Nano)
+
+	// Save with correct mtime → should succeed
+	content2 := "# Version 2"
+	err = svc.SaveNoteWithCheck(notePath, content2, goodMtime)
+	require.NoError(t, err)
+
+	// Stale mtime (from before version 2 write) → should return ErrConflict
+	content3 := "# Version 3"
+	err = svc.SaveNoteWithCheck(notePath, content3, goodMtime)
+	assert.ErrorIs(t, err, ErrConflict)
+
+	// Empty knownMtime → backward compatible skip check → should succeed
+	content4 := "# Version 4"
+	err = svc.SaveNoteWithCheck(notePath, content4, "")
+	require.NoError(t, err)
+
+	// Verify final content is version 4
+	result, err := svc.GetNoteContent(notePath)
+	require.NoError(t, err)
+	assert.Equal(t, content4, result)
+}

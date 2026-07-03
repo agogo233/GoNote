@@ -448,3 +448,40 @@ func TestNoteServiceStopCacheCleanupMultipleTimes(t *testing.T) {
 	noteService.StopCacheCleanup()
 	noteService.StopCacheCleanup()
 }
+
+func TestCacheGet_ConcurrentExpiry(t *testing.T) {
+	cache := NewCache(100, 50*time.Millisecond)
+	defer cache.StopCleanup()
+
+	cache.Set("expkey", "value")
+	// Verify it's there initially
+	val, ok := cache.Get("expkey")
+	if !ok {
+		t.Fatal("expected key to exist right after Set")
+	}
+	if val != "value" {
+		t.Fatalf("expected 'value', got %v", val)
+	}
+
+	// Wait for TTL to expire
+	time.Sleep(80 * time.Millisecond)
+
+	// Concurrently trigger the expired + upgrade-path under load
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 20; j++ {
+				cache.Get("expkey")
+			}
+		}()
+	}
+	wg.Wait()
+
+	// After expiry the key should be gone
+	_, ok = cache.Get("expkey")
+	if ok {
+		t.Error("expected expired key to not be found after concurrent expiry")
+	}
+}

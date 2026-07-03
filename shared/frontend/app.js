@@ -1408,6 +1408,7 @@ function noteApp() {
                 const data = await response.json();
                 this.notes = data.notes || [];
                 this.folders.all = data.folders || [];
+                this.folderNotePages = {}; // Reset sidebar pagination on data reload
                 this.buildNoteLookupMaps(); // Build O(1) lookup maps
                 this.buildFolderTree();
                 await this.loadTags(); // Load tags after notes are loaded
