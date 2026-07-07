@@ -1152,8 +1152,10 @@ function noteApp() {
             const textarea = document.getElementById('note-editor');
             const overlay = document.getElementById('syntax-overlay');
             if (textarea && overlay) {
-                overlay.scrollTop = textarea.scrollTop;
-                overlay.scrollLeft = textarea.scrollLeft;
+                requestAnimationFrame(() => {
+                    overlay.scrollTop = textarea.scrollTop;
+                    overlay.scrollLeft = textarea.scrollLeft;
+                });
             }
         },
         
@@ -1821,7 +1823,8 @@ function noteApp() {
 
                     // Calculate scroll position (approximate)
                     const lineHeight = parseFloat(getComputedStyle(textarea).lineHeight) || 24;
-                    const scrollTop = (heading.line - 1) * lineHeight - textarea.clientHeight / 3;
+                    const paddingTop = parseFloat(getComputedStyle(textarea).paddingTop) || 24;
+                    const scrollTop = (heading.line - 1) * lineHeight + paddingTop - textarea.clientHeight / 3;
                     textarea.scrollTop = Math.max(0, scrollTop);
                 }
             }
@@ -1835,7 +1838,41 @@ function noteApp() {
                 el.style.backgroundColor = '';
             }, 1000);
         },
-        
+
+        // Find the nearest heading above the editor viewport top
+        findNearestHeadingInEditor(editor) {
+            if (!this.note.outline || this.note.outline.length === 0) return null;
+            const lineHeight = parseFloat(getComputedStyle(editor).lineHeight) || 24;
+            const paddingTop = parseFloat(getComputedStyle(editor).paddingTop) || 24;
+            const topLine = Math.max(1, Math.round((editor.scrollTop - paddingTop) / lineHeight) + 1);
+            let nearest = null;
+            for (const h of this.note.outline) {
+                if (h.line <= topLine) nearest = h;
+                else break;
+            }
+            return nearest;
+        },
+
+        // Find the heading closest to the preview viewport top
+        findNearestHeadingInPreview(previewContainer) {
+            if (!this.note.outline || this.note.outline.length === 0) return null;
+            const containerRect = previewContainer.getBoundingClientRect();
+            let nearest = null;
+            let minDist = Infinity;
+            for (const h of this.note.outline) {
+                const el = document.getElementById(h.slug);
+                if (el && previewContainer.contains(el)) {
+                    const rect = el.getBoundingClientRect();
+                    const dist = Math.abs(rect.top - containerRect.top);
+                    if (dist < minDist) {
+                        minDist = dist;
+                        nearest = h;
+                    }
+                }
+            }
+            return nearest;
+        },
+
         // Unified filtering logic combining tags and text search
         async applyFilters() {
             const hasTextSearch = this.search.query.trim().length > 0;
@@ -3813,32 +3850,42 @@ function noteApp() {
         
         // Navigate to next search match
         nextMatch() {
-            // In edit mode, navigate editor matches
+            // In edit mode, navigate editor matches only
             if (this.ui.viewMode === 'edit' && this.search.editorMatchCount > 0) {
                 this.nextEditorMatch();
                 return;
             }
             
-            // In preview/split mode, navigate preview matches
             if (this.search.totalMatches === 0) return;
             
             this.search.matchIndex = (this.search.matchIndex + 1) % this.search.totalMatches;
             this.scrollToMatch(this.search.matchIndex);
+            
+            // In split mode, also navigate the editor to the corresponding match
+            if (this.ui.viewMode === 'split' && this.search.editorMatchPositions.length > 0) {
+                const editorIndex = Math.min(this.search.matchIndex, this.search.editorMatchPositions.length - 1);
+                this.scrollToEditorMatch(editorIndex);
+            }
         },
         
         // Navigate to previous search match
         previousMatch() {
-            // In edit mode, navigate editor matches
+            // In edit mode, navigate editor matches only
             if (this.ui.viewMode === 'edit' && this.search.editorMatchCount > 0) {
                 this.previousEditorMatch();
                 return;
             }
             
-            // In preview/split mode, navigate preview matches
             if (this.search.totalMatches === 0) return;
             
             this.search.matchIndex = (this.search.matchIndex - 1 + this.search.totalMatches) % this.search.totalMatches;
             this.scrollToMatch(this.search.matchIndex);
+            
+            // In split mode, also navigate the editor to the corresponding match
+            if (this.ui.viewMode === 'split' && this.search.editorMatchPositions.length > 0) {
+                const editorIndex = Math.min(this.search.matchIndex, this.search.editorMatchPositions.length - 1);
+                this.scrollToEditorMatch(editorIndex);
+            }
         },
         
         // Scroll to a specific match index
@@ -5811,26 +5858,43 @@ function noteApp() {
                 preview.removeEventListener('scroll', this._previewScrollHandler);
             }
             
-            // Create new scroll handlers with cooldown-based debounce
-            // Key improvement: isScrolling holds for SCROLL_SYNC_DELAY (50ms) instead of
-            // being immediately reset on the first reverse event. This prevents oscillation
-            // when browser momentum/inertia scroll events fire during the sync cascade.
+            // Create new scroll handlers with heading-anchored sync
+            // Key improvement: uses heading positions as anchor points for precise alignment
+            // between editor text lines and rendered preview elements. Falls back to
+            // percentage-based sync when no heading is near the viewport.
             this._editorScrollHandler = () => {
                 if (this.ui.isScrolling) return;
                 
                 const scrollableHeight = editor.scrollHeight - editor.clientHeight;
                 if (scrollableHeight <= 0) return;
                 
-                const scrollPercentage = editor.scrollTop / scrollableHeight;
                 const previewScrollableHeight = preview.scrollHeight - preview.clientHeight;
+                if (previewScrollableHeight <= 0) return;
                 
-                if (previewScrollableHeight > 0) {
-                    this.ui.isScrolling = true;
-                    preview.scrollTop = scrollPercentage * previewScrollableHeight;
-                    setTimeout(() => {
-                        this.ui.isScrolling = false;
-                    }, CONFIG.SCROLL_SYNC_DELAY);
+                let targetScrollTop = null;
+                
+                // Try heading-anchored sync first
+                const heading = this.findNearestHeadingInEditor(editor);
+                if (heading) {
+                    const headingEl = document.getElementById(heading.slug);
+                    if (headingEl && preview.contains(headingEl)) {
+                        const containerRect = preview.getBoundingClientRect();
+                        const headingRect = headingEl.getBoundingClientRect();
+                        targetScrollTop = preview.scrollTop + (headingRect.top - containerRect.top);
+                    }
                 }
+                
+                // Fallback to percentage-based sync
+                if (targetScrollTop === null) {
+                    const scrollPercentage = editor.scrollTop / scrollableHeight;
+                    targetScrollTop = scrollPercentage * previewScrollableHeight;
+                }
+                
+                this.ui.isScrolling = true;
+                preview.scrollTop = Math.max(0, Math.min(targetScrollTop, preview.scrollHeight - preview.clientHeight));
+                setTimeout(() => {
+                    this.ui.isScrolling = false;
+                }, CONFIG.SCROLL_SYNC_DELAY);
             };
             
             this._previewScrollHandler = () => {
@@ -5839,16 +5903,30 @@ function noteApp() {
                 const scrollableHeight = preview.scrollHeight - preview.clientHeight;
                 if (scrollableHeight <= 0) return;
                 
-                const scrollPercentage = preview.scrollTop / scrollableHeight;
                 const editorScrollableHeight = editor.scrollHeight - editor.clientHeight;
+                if (editorScrollableHeight <= 0) return;
                 
-                if (editorScrollableHeight > 0) {
-                    this.ui.isScrolling = true;
-                    editor.scrollTop = scrollPercentage * editorScrollableHeight;
-                    setTimeout(() => {
-                        this.ui.isScrolling = false;
-                    }, CONFIG.SCROLL_SYNC_DELAY);
+                let targetScrollTop = null;
+                
+                // Try heading-anchored sync first
+                const heading = this.findNearestHeadingInPreview(preview);
+                if (heading && heading.line) {
+                    const lineHeight = parseFloat(getComputedStyle(editor).lineHeight) || 24;
+                    const paddingTop = parseFloat(getComputedStyle(editor).paddingTop) || 24;
+                    targetScrollTop = (heading.line - 1) * lineHeight + paddingTop - editor.clientHeight / 3;
                 }
+                
+                // Fallback to percentage-based sync
+                if (targetScrollTop === null) {
+                    const scrollPercentage = preview.scrollTop / scrollableHeight;
+                    targetScrollTop = scrollPercentage * editorScrollableHeight;
+                }
+                
+                this.ui.isScrolling = true;
+                editor.scrollTop = Math.max(0, Math.min(targetScrollTop, editor.scrollHeight - editor.clientHeight));
+                setTimeout(() => {
+                    this.ui.isScrolling = false;
+                }, CONFIG.SCROLL_SYNC_DELAY);
             };
             
             // Attach new listeners
@@ -6301,14 +6379,26 @@ function noteApp() {
             
             const container = event.target.parentElement;
             const HANDLE_WIDTH = 6; // Match CSS width of .split-resize-handle
+            const SNAP_THRESHOLD = 3; // Snap to 50% when within 3%
+            
+            const getClientX = (e) => {
+                if (e.touches && e.touches.length > 0) return e.touches[0].clientX;
+                return e.clientX;
+            };
             
             const resize = (e) => {
                 if (!this.ui.isResizingSplit) return;
+                e.preventDefault();
                 
                 const containerRect = container.getBoundingClientRect();
-                // Center the handle on the mouse cursor by subtracting half the handle width
-                const mouseX = e.clientX - containerRect.left - (HANDLE_WIDTH / 2);
-                const percentage = (mouseX / containerRect.width) * 100;
+                const clientX = getClientX(e);
+                const mouseX = clientX - containerRect.left - (HANDLE_WIDTH / 2);
+                let percentage = (mouseX / containerRect.width) * 100;
+                
+                // Snap to 50% midpoint when close
+                if (Math.abs(percentage - 50) < SNAP_THRESHOLD) {
+                    percentage = 50;
+                }
                 
                 // Clamp between 20% and 80%
                 if (percentage >= 20 && percentage <= 80) {
@@ -6322,11 +6412,15 @@ function noteApp() {
                     this.saveEditorWidth();
                     document.removeEventListener('mousemove', resize);
                     document.removeEventListener('mouseup', stopResize);
+                    document.removeEventListener('touchmove', resize);
+                    document.removeEventListener('touchend', stopResize);
                 }
             };
             
             document.addEventListener('mousemove', resize);
             document.addEventListener('mouseup', stopResize);
+            document.addEventListener('touchmove', resize, { passive: false });
+            document.addEventListener('touchend', stopResize);
         },
         
         // Setup mobile view mode handler (auto-switch from split to edit on mobile)
