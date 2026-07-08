@@ -62,7 +62,7 @@ func (s *TemplateService) GetTemplates() ([]models.Template, error) {
 		templates = append(templates, models.Template{
 			Name:     strings.TrimSuffix(entry.Name(), ".md"),
 			Path:     "_templates/" + entry.Name(),
-			Modified: info.ModTime().UTC().Format(time.RFC3339),
+			Modified: info.ModTime().UTC().Format(time.RFC3339Nano),
 		})
 	}
 

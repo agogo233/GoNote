@@ -227,7 +227,7 @@ func (s *NoteService) doScan(includeMedia bool) ([]models.Note, []string) {
 			Name:     strings.TrimSuffix(d.Name(), filepath.Ext(d.Name())),
 			Path:     ToPosixPath(relPath),
 			Folder:   folder,
-			Modified: info.ModTime().UTC().Format(time.RFC3339),
+			Modified: info.ModTime().UTC().Format(time.RFC3339Nano),
 			Size:     info.Size(),
 			Type:     noteType,
 			Tags:     tags,
@@ -323,7 +323,7 @@ func (s *NoteService) doScanBoth() (allNotes, notesOnly []models.Note, folders [
 			Name:     strings.TrimSuffix(d.Name(), filepath.Ext(d.Name())),
 			Path:     ToPosixPath(relPath),
 			Folder:   folder,
-			Modified: info.ModTime().UTC().Format(time.RFC3339),
+			Modified: info.ModTime().UTC().Format(time.RFC3339Nano),
 			Size:     info.Size(),
 			Type:     noteType,
 			Tags:     tags,
@@ -428,8 +428,8 @@ func (s *NoteService) GetNoteContentWithMetadata(notePath string) (content strin
 	}
 
 	return string(data), &models.NoteMetadata{
-		Created:  info.ModTime().UTC().Format(time.RFC3339),
-		Modified: info.ModTime().UTC().Format(time.RFC3339),
+		Created:  info.ModTime().UTC().Format(time.RFC3339Nano),
+		Modified: info.ModTime().UTC().Format(time.RFC3339Nano),
 		Size:     info.Size(),
 		Lines:    lineCount,
 	}, nil
@@ -471,8 +471,11 @@ func (s *NoteService) SaveNoteWithCheck(notePath, content, knownMtime string) er
 			return fmt.Errorf("stat note: %w", err)
 		}
 		if err == nil {
-			currentMtime := info.ModTime().UTC().Format(time.RFC3339Nano)
-			if currentMtime != knownMtime {
+			known, parseErr := time.Parse(time.RFC3339Nano, knownMtime)
+			if parseErr != nil {
+				known, parseErr = time.Parse(time.RFC3339, knownMtime)
+			}
+			if parseErr == nil && !info.ModTime().UTC().Equal(known) {
 				return ErrConflict
 			}
 		}
@@ -590,8 +593,8 @@ func (s *NoteService) GetNoteMetadata(notePath string) (*models.NoteMetadata, er
 	}
 
 	return &models.NoteMetadata{
-		Created:  info.ModTime().UTC().Format(time.RFC3339), // Using ModTime as creation time
-		Modified: info.ModTime().UTC().Format(time.RFC3339),
+		Created:  info.ModTime().UTC().Format(time.RFC3339Nano), // Using ModTime as creation time
+		Modified: info.ModTime().UTC().Format(time.RFC3339Nano),
 		Size:     info.Size(),
 		Lines:    lineCount,
 	}, nil

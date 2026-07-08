@@ -594,3 +594,52 @@ func TestSaveNoteWithCheck_OptimisticLockConflict(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, content4, result)
 }
+
+// TestSaveNoteWithCheck_GetThenSaveNoConflict 锁定回归：GetNoteContentWithMetadata
+// 返回的 Modified 串（RFC3339Nano）原样回传给 SaveNoteWithCheck 应通过乐观锁，
+// 不得因格式不对称而误报 ErrConflict。
+func TestSaveNoteWithCheck_GetThenSaveNoConflict(t *testing.T) {
+	tmpDir := t.TempDir()
+	svc := NewNoteService(tmpDir)
+
+	notePath := "regression.md"
+	content1 := "# First"
+
+	// 创建笔记
+	require.NoError(t, svc.SaveNoteWithCheck(notePath, content1, ""))
+	// 确保后续写产生不同亚秒 mtime
+	time.Sleep(10 * time.Millisecond)
+
+	// 走真实读取路径，拿到前端会拿到的 Modified 串
+	_, meta, err := svc.GetNoteContentWithMetadata(notePath)
+	require.NoError(t, err)
+	require.NotEmpty(t, meta.Modified)
+
+	// 原样回传保存 → 不应误报冲突
+	require.NoError(t, svc.SaveNoteWithCheck(notePath, "# Second", meta.Modified))
+
+	//第二次用同一 stale 串保存 → 现在文件 mtime 已变，应正确报冲突
+	assert.ErrorIs(t, svc.SaveNoteWithCheck(notePath, "# Third", meta.Modified), ErrConflict)
+}
+
+// TestSaveNoteWithCheck_SubSecondStaleMtime 确认亚秒级 mtime 偏移仍能正确触发冲突检测，
+// 防止改用 time.Time.Equal 比较后丢失精度。
+func TestSaveNoteWithCheck_SubSecondStaleMtime(t *testing.T) {
+	tmpDir := t.TempDir()
+	svc := NewNoteService(tmpDir)
+
+	notePath := "stale.md"
+	require.NoError(t, svc.SaveNoteWithCheck(notePath, "# v1", ""))
+
+	fullPath := filepath.Join(tmpDir, notePath)
+	info, err := os.Stat(fullPath)
+	require.NoError(t, err)
+
+	// 当前 mtime 减 1ms → 亚秒级偏移 → 应判冲突
+	staleMtime := info.ModTime().UTC().Add(-time.Millisecond).Format(time.RFC3339Nano)
+	assert.ErrorIs(t, svc.SaveNoteWithCheck(notePath, "# v2", staleMtime), ErrConflict)
+
+	// 当前 mtime 完全一致 → 应通过
+	currentMtime := info.ModTime().UTC().Format(time.RFC3339Nano)
+	require.NoError(t, svc.SaveNoteWithCheck(notePath, "# v3", currentMtime))
+}
