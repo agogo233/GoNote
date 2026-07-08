@@ -55,12 +55,18 @@ func (h *SearchHandler) Search(c *fiber.Ctx) error {
 			results, err = h.searchIndex.SearchByTitle(query)
 		case "smart":
 			results, err = h.searchIndex.SearchSmart(query)
+		case "filename":
+			results, err = h.searchIndex.SearchByFilename(query)
 		default: // "full"
 			results, err = h.searchIndex.Search(query)
 		}
 	} else {
-		// Fallback: full scan search (mode not supported in legacy search)
-		results, err = h.service.Search(query)
+		// Fallback: full scan search (title/smart mode not supported in legacy search)
+		if mode == "filename" {
+			results, err = h.service.SearchFilename(query)
+		} else {
+			results, err = h.service.Search(query)
+		}
 	}
 
 	if err != nil {

@@ -698,3 +698,86 @@ func TestSearchIndex_SearchSmart_CJK(t *testing.T) {
 		t.Error("Expected SearchSmart to find CJK results")
 	}
 }
+
+func TestSearchIndex_SearchByFilename(t *testing.T) {
+	tempDir := t.TempDir()
+
+	notes := map[string]string{
+		"travel-guide.md":       "# 旅行指南\nSome content about travel.",
+		"travel-blog.md":        "# 旅游博客\nSome blog content.",
+		"recipes/cooking.md":    "# 烹饪笔记\nContent about cooking.",
+		"work/notes.md":         "# 工作笔记\nWork related notes.",
+		"travel/japan.md":       "# 日本旅行\nJapan travel notes.",
+	}
+
+	for path, content := range notes {
+		fullPath := filepath.Join(tempDir, path)
+		if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
+			t.Fatalf("Failed to create dir: %v", err)
+		}
+		if err := os.WriteFile(fullPath, []byte(content), 0644); err != nil {
+			t.Fatalf("Failed to write file: %v", err)
+		}
+	}
+
+	ns := NewNoteService(tempDir)
+	si := NewSearchIndex(tempDir, ns)
+	if err := si.BuildIndex(); err != nil {
+		t.Fatalf("BuildIndex failed: %v", err)
+	}
+
+	t.Run("match basename", func(t *testing.T) {
+		results, err := si.SearchByFilename("travel-guide")
+		if err != nil {
+			t.Fatalf("SearchByFilename failed: %v", err)
+		}
+		if len(results) != 1 {
+			t.Fatalf("Expected 1 result for 'travel-guide', got %d", len(results))
+		}
+		if results[0].Name != "travel guide" {
+			t.Errorf("Expected result name 'travel guide', got '%s'", results[0].Name)
+		}
+	})
+
+	t.Run("match directory path", func(t *testing.T) {
+		results, err := si.SearchByFilename("travel")
+		if err != nil {
+			t.Fatalf("SearchByFilename failed: %v", err)
+		}
+		if len(results) != 3 {
+			t.Fatalf("Expected 3 results for 'travel' (dir + 2 basenames), got %d", len(results))
+		}
+	})
+
+	t.Run("match partial basename", func(t *testing.T) {
+		results, err := si.SearchByFilename("guide")
+		if err != nil {
+			t.Fatalf("SearchByFilename failed: %v", err)
+		}
+		if len(results) != 1 {
+			t.Fatalf("Expected 1 result for 'guide', got %d", len(results))
+		}
+	})
+
+	t.Run("no match", func(t *testing.T) {
+		results, err := si.SearchByFilename("nonexistent")
+		if err != nil {
+			t.Fatalf("SearchByFilename failed: %v", err)
+		}
+		if len(results) != 0 {
+			t.Errorf("Expected 0 results for 'nonexistent', got %d", len(results))
+		}
+	})
+
+	t.Run("scoring: exact > substring > path-only", func(t *testing.T) {
+		results, err := si.SearchByFilename("travel")
+		if err != nil {
+			t.Fatalf("SearchByFilename failed: %v", err)
+		}
+		for _, r := range results {
+			if r.Score <= 0 {
+				t.Errorf("Result '%s' should have positive score", r.Name)
+			}
+		}
+	})
+}

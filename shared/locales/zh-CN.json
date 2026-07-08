@@ -279,7 +279,9 @@
     "mode_smart": "智能",
     "mode_smart_desc": "标题优先，内容兜底",
     "mode_title": "标题",
-    "mode_title_desc": "仅搜索笔记标题"
+    "mode_title_desc": "仅搜索笔记标题",
+    "mode_filename": "文件名",
+    "mode_filename_desc": "搜索文件名和目录路径"
   },
 
   "theme": {

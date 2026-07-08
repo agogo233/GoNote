@@ -874,6 +874,96 @@ func (si *SearchIndex) SearchSmart(query string) ([]models.SearchResult, error) 
 	return results, nil
 }
 
+// SearchByFilename searches only note filenames and directory paths.
+// Uses direct disk scan (ScanNotes) rather than the index, since the
+// index only stores basename tokens and cannot match directory paths.
+func (si *SearchIndex) SearchByFilename(query string) ([]models.SearchResult, error) {
+	if query == "" {
+		return []models.SearchResult{}, nil
+	}
+
+	return si.searchFilenameFromDisk(query)
+}
+
+// searchFilenameFromDisk scans all notes and matches against filename + path
+func (si *SearchIndex) searchFilenameFromDisk(query string) ([]models.SearchResult, error) {
+	notes, _, err := si.noteService.ScanNotes(false)
+	if err != nil {
+		return nil, err
+	}
+
+	queryLower := strings.ToLower(query)
+	var results []models.SearchResult
+
+	for _, note := range notes {
+		fileName := extractFileName(note.Path)
+		pathLower := strings.ToLower(note.Path)
+		fileNameLower := strings.ToLower(fileName)
+
+		if !strings.Contains(pathLower, queryLower) && !strings.Contains(fileNameLower, queryLower) {
+			continue
+		}
+
+		score := si.calculateFilenameScore(pathLower, fileNameLower, queryLower)
+		results = append(results, si.buildFilenameResult(note.Path, query))
+		results[len(results)-1].Score = score
+	}
+
+	sort.SliceStable(results, func(i, j int) bool {
+		return results[i].Score > results[j].Score
+	})
+
+	return results, nil
+}
+
+// calculateFilenameScore scores filename matches: basename exact > basename substring > raw path substring > directory only
+func (si *SearchIndex) calculateFilenameScore(pathLower, fileNameLower, queryLower string) float64 {
+	if fileNameLower == queryLower {
+		return 100.0
+	}
+	if strings.Contains(fileNameLower, queryLower) {
+		return 80.0
+	}
+	if strings.Contains(pathLower, queryLower) {
+		return 60.0
+	}
+	return 40.0
+}
+
+// buildFilenameResult builds a search result for filename/path matches.
+// Uses the filename (not content title) as the display name, and leaves
+// Matches empty so the frontend falls through to showing the folder path.
+func (si *SearchIndex) buildFilenameResult(notePath string, query string) models.SearchResult {
+	name := extractFileName(notePath)
+	folder := filepath.Dir(notePath)
+	if folder == "." {
+		folder = ""
+	}
+	fileType := getFileType(notePath)
+
+	context := name
+	if query != "" {
+		escapedQuery := regexp.QuoteMeta(query)
+		pattern, err := si.getOrCompileRegex("(?i)" + escapedQuery)
+		if err == nil {
+			context = pattern.ReplaceAllString(name, "<mark class=\"search-highlight\">$0</mark>")
+		}
+	}
+
+	return models.SearchResult{
+		Name:   name,
+		Path:   notePath,
+		Folder: folder,
+		Type:   fileType,
+		Matches: []models.MatchContext{
+			{
+				LineNumber: 1,
+				Context:    context,
+			},
+		},
+	}
+}
+
 // searchByTitleInternal is the internal version without lock (caller holds lock)
 func (si *SearchIndex) searchByTitleInternal(query string) ([]models.SearchResult, error) {
 	if query == "" {

@@ -144,6 +144,48 @@ func (s *SearchService) Search(query string) ([]models.SearchResult, error) {
 	return results, nil
 }
 
+// SearchFilename searches only note filenames and directory paths (legacy fallback).
+// Matches against note.Path (relative) and the basename (with -/_ normalized to spaces).
+func (s *SearchService) SearchFilename(query string) ([]models.SearchResult, error) {
+	results := []models.SearchResult{}
+
+	ns := s.noteService
+	if ns == nil {
+		ns = NewNoteService(s.notesDir)
+	}
+	notes, _, err := ns.ScanNotes(false)
+	if err != nil {
+		return nil, err
+	}
+
+	escapedQuery := regexp.QuoteMeta(query)
+	pattern, err := s.getOrCompileRegex("(?i)" + escapedQuery)
+	if err != nil {
+		return nil, err
+	}
+	queryLower := strings.ToLower(query)
+
+	for _, note := range notes {
+		name := filepath.Base(note.Path)
+		name = strings.TrimSuffix(name, filepath.Ext(name))
+		name = strings.ReplaceAll(name, "-", " ")
+		name = strings.ReplaceAll(name, "_", " ")
+
+		if !pattern.MatchString(note.Path) && !strings.Contains(strings.ToLower(name), queryLower) {
+			continue
+		}
+
+		results = append(results, models.SearchResult{
+			Name:   name,
+			Path:   note.Path,
+			Folder: note.Folder,
+			Type:   note.Type,
+		})
+	}
+
+	return results, nil
+}
+
 // readFileContent reads file content safely
 func readFileContent(path string) (string, error) {
 	data, err := os.ReadFile(path)

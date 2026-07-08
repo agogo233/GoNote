@@ -2126,6 +2126,14 @@
                                 x-text="t('search.mode_title')"
                                 :title="t('search.mode_title_desc')"
                             ></button>
+                            <button
+                                @click="search.mode = 'filename'; debouncedSearchNotes()"
+                                class="px-2 py-0.5 rounded transition-colors"
+                                :class="search.mode === 'filename' ? 'font-semibold' : 'opacity-60 hover:opacity-100'"
+                                :style="search.mode === 'filename' ? 'background-color: var(--accent-primary); color: white;' : 'color: var(--text-secondary);'"
+                                x-text="t('search.mode_filename')"
+                                :title="t('search.mode_filename_desc')"
+                            ></button>
                         </div>
                         
                         <!-- Match Navigation -->
