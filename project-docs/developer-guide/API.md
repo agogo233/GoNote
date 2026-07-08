@@ -734,7 +734,7 @@ GET /health
 {
   "status": "ok",
   "app": "GoNote",
-  "version": "0.25.0"
+  "version": "0.25"
 }
 ```
 
@@ -1175,7 +1175,7 @@ http://localhost:9000/share/aBcDeFgHiJk
 3. **路径规范**：所有路径都应使用正斜杠 `/`，不要以 `/` 开头
 4. **文件扩展名**：笔记文件应使用 `.md` 扩展名
 5. **编码**：请求和响应均为 UTF-8 编码
-6. **速率限制**：当前版本无速率限制，生产环境建议配置反向代理限制
+6. **速率限制**：可通过 `rate_limit.enabled` 和 `RATE_LIMIT_ENABLED` 配置限流，默认关闭。生产环境建议启用。多个公共端点（`/share/:token`、SPA fallback）已内置简单限流保护。
 
 ---
 
@@ -1185,4 +1185,4 @@ http://localhost:9000/share/aBcDeFgHiJk
 
 **当前版本 (Current Version):** v1.0
 
-**最后更新 (Last Updated):** 2025-01-15
+**最后更新 (Last Updated):** 2026-07-08
