@@ -42,6 +42,8 @@ type SearchIndex struct {
 	titleSortedDirty   atomic.Bool
 
 	buildDone atomic.Bool // 标记 BuildIndex 是否至少完成一次（用于 /readyz）
+
+	regexCache sync.Map // map[string]*regexp.Regexp, 避免热路径上反复编译
 }
 
 // TitleEntry represents a title match with score
@@ -69,6 +71,19 @@ func NewSearchIndex(notesDir string, noteService *NoteService) *SearchIndex {
 		noteService:   noteService,
 		searchService: NewSearchService(notesDir),
 	}
+}
+
+// getOrCompileRegex 从缓存中获取已编译的正则，避免热路径上反复编译。
+func (si *SearchIndex) getOrCompileRegex(pattern string) (*regexp.Regexp, error) {
+	if cached, ok := si.regexCache.Load(pattern); ok {
+		return cached.(*regexp.Regexp), nil
+	}
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		return nil, err
+	}
+	si.regexCache.Store(pattern, re)
+	return re, nil
 }
 
 // BuildIndex builds the full search index from all notes
@@ -1032,10 +1047,11 @@ func (si *SearchIndex) buildTitleResult(notePath string, title string, query str
 	// Create a match context showing the title is matched
 	context := title
 	if query != "" {
-		// Highlight the query in the title
 		escapedQuery := regexp.QuoteMeta(query)
-		pattern := regexp.MustCompile("(?i)" + escapedQuery)
-		context = pattern.ReplaceAllString(title, "<mark class=\"search-highlight\">$0</mark>")
+		pattern, err := si.getOrCompileRegex("(?i)" + escapedQuery)
+		if err == nil {
+			context = pattern.ReplaceAllString(title, "<mark class=\"search-highlight\">$0</mark>")
+		}
 	}
 
 	return models.SearchResult{
@@ -1056,9 +1072,8 @@ func (si *SearchIndex) buildTitleResult(notePath string, title string, query str
 // Uses prefix matching to stay consistent with the inverted index lookup strategy
 func (si *SearchIndex) contentContainsAllKeywords(content string, terms []string) bool {
 	contentLower := strings.ToLower(content)
+	contentTerms := tokenize(contentLower)
 	for _, term := range terms {
-		// Tokenize content and check prefix match (consistent with noteContainsTermsWithPrefix)
-		contentTerms := tokenize(contentLower)
 		found := false
 		for _, ct := range contentTerms {
 			if strings.HasPrefix(ct, term) {
@@ -1066,7 +1081,6 @@ func (si *SearchIndex) contentContainsAllKeywords(content string, terms []string
 				break
 			}
 		}
-		// Fallback: direct substring check for non-tokenizable content
 		if !found && strings.Contains(contentLower, term) {
 			found = true
 		}
@@ -1085,7 +1099,10 @@ func (si *SearchIndex) buildSearchResult(notePath string, content string, query 
 	// Use the original query as pattern for finding match positions
 	// (Go's regexp does not support lookahead assertions, so we match the raw query)
 	escapedQuery := regexp.QuoteMeta(query)
-	pattern := regexp.MustCompile("(?i)" + escapedQuery)
+	pattern, err := si.getOrCompileRegex("(?i)" + escapedQuery)
+	if err != nil {
+		return models.SearchResult{}
+	}
 
 	// Find all matching positions
 	allMatches := pattern.FindAllStringIndex(content, -1)
@@ -1114,7 +1131,7 @@ func (si *SearchIndex) buildSearchResult(notePath string, content string, query 
 		context = strings.ReplaceAll(context, "\n", " ")
 
 		// Apply per-term highlighting within the context snippet
-		context = highlightTerms(context, terms)
+		context = si.highlightTerms(context, terms)
 
 		// Calculate line number
 		lineNumber := strings.Count(content[:startIndex], "\n") + 1
@@ -1145,14 +1162,16 @@ func (si *SearchIndex) buildSearchResult(notePath string, content string, query 
 }
 
 // highlightTerms wraps all occurrences of each term in the text with <mark> tags
-func highlightTerms(text string, terms []string) string {
+func (si *SearchIndex) highlightTerms(text string, terms []string) string {
 	if len(terms) == 0 {
 		return text
 	}
 	result := text
 	for _, term := range terms {
-		re := regexp.MustCompile("(?i)" + regexp.QuoteMeta(term))
-		result = re.ReplaceAllString(result, "<mark class=\"search-highlight\">$0</mark>")
+		re, err := si.getOrCompileRegex("(?i)" + regexp.QuoteMeta(term))
+		if err == nil {
+			result = re.ReplaceAllString(result, "<mark class=\"search-highlight\">$0</mark>")
+		}
 	}
 	return result
 }

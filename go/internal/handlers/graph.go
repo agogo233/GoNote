@@ -27,3 +27,7 @@ func (h *GraphHandler) Get(c *fiber.Ctx) error {
 
 	return c.JSON(graph)
 }
+
+func (h *GraphHandler) RegisterRoutes(api fiber.Router) {
+	api.Get("/graph", h.Get)
+}

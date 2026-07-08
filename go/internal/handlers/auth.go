@@ -7,6 +7,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"golang.org/x/crypto/bcrypt"
 
+	"gonote/internal/models"
 	"gonote/internal/models/config"
 	"gonote/internal/middleware"
 )
@@ -100,7 +101,7 @@ func (h *AuthHandler) LoginPage(c *fiber.Ctx) error {
                 if (data.success) {
                     window.location.href = '/';
                 } else {
-                    errorDiv.textContent = data.detail || 'Login failed';
+                    errorDiv.textContent = data.message || 'Login failed';
                     errorDiv.style.display = 'block';
                 }
             } catch (err) {
@@ -121,7 +122,7 @@ func (h *AuthHandler) LoginPage(c *fiber.Ctx) error {
 func (h *AuthHandler) Login(c *fiber.Ctx) error {
 	// If auth is disabled, allow access
 	if !h.config.Authentication.Enabled {
-		return c.JSON(fiber.Map{"success": true})
+		return c.JSON(models.APIResponse{Success: true})
 	}
 
 	// Parse request
@@ -129,12 +130,12 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 		Password string `json:"password"`
 	}
 	if err := c.BodyParser(&req); err != nil {
-		return c.Status(400).JSON(fiber.Map{"success": false, "detail": "Invalid request"})
+		return c.Status(400).JSON(models.APIResponse{Success: false, Message: "Invalid request"})
 	}
 
 	// Verify password
 	if h.config.Authentication.PasswordHash == "" {
-		return c.Status(500).JSON(fiber.Map{"success": false, "detail": "Password not configured"})
+		return c.Status(500).JSON(models.APIResponse{Success: false, Message: "Password not configured"})
 	}
 
 	err := bcrypt.CompareHashAndPassword(
@@ -142,7 +143,7 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 		[]byte(req.Password),
 	)
 	if err != nil {
-		return c.Status(401).JSON(fiber.Map{"success": false, "detail": "Invalid password"})
+		return c.Status(401).JSON(models.APIResponse{Success: false, Message: "Invalid password"})
 	}
 
 	// 🔒 防止会话固定攻击：先重新生成会话 ID，再设置认证标志
@@ -150,7 +151,7 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 
 	// 1. 重新生成会话 ID，销毁旧会话（防止会话固定攻击）
 	if err := sess.Regenerate(); err != nil {
-		return c.Status(500).JSON(fiber.Map{"success": false, "detail": "Failed to regenerate session"})
+		return c.Status(500).JSON(models.APIResponse{Success: false, Message: "Failed to regenerate session"})
 	}
 
 	// 2. 在新会话中设置认证标志
@@ -158,10 +159,10 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 
 	// 3. 保存会话
 	if err := sess.Save(); err != nil {
-		return c.Status(500).JSON(fiber.Map{"success": false, "detail": "Failed to create session"})
+		return c.Status(500).JSON(models.APIResponse{Success: false, Message: "Failed to create session"})
 	}
 
-	return c.JSON(fiber.Map{"success": true})
+	return c.JSON(models.APIResponse{Success: true})
 }
 
 // Logout handles logout requests
@@ -172,11 +173,17 @@ func (h *AuthHandler) Logout(c *fiber.Ctx) error {
 
 	// For API requests, return JSON
 	if strings.HasPrefix(c.Path(), "/api/") {
-		return c.JSON(fiber.Map{"success": true})
+		return c.JSON(models.APIResponse{Success: true})
 	}
 
 	// For page requests, redirect to login
 	return c.Redirect("/login", 303)
+}
+
+func (h *AuthHandler) RegisterRoutes(app *fiber.App) {
+	app.Get("/login", h.LoginPage)
+	app.Post("/login", middleware.EndpointLimiterSimple(10), h.Login)
+	app.Post("/logout", h.Logout)
 }
 
 

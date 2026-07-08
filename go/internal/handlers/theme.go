@@ -43,3 +43,8 @@ func (h *ThemeHandler) Get(c *fiber.Ctx) error {
 		ThemeID: themeID,
 	})
 }
+
+func (h *ThemeHandler) RegisterRoutes(app *fiber.App) {
+	app.Get("/api/themes", h.List)
+	app.Get("/api/themes/:id", h.Get)
+}

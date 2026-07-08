@@ -6,10 +6,11 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	applogger "gonote/internal/models/logger"
+	"gonote/internal/models/logger"
 	"gonote/internal/models/config"
 	"gonote/internal/models"
 	"gonote/internal/services"
+	"gonote/internal/middleware"
 )
 
 // SystemHandler handles system-related requests
@@ -53,7 +54,7 @@ func (h *SystemHandler) ReadinessCheck(c *fiber.Ctx) error {
 		if err != nil {
 			checks["notes_dir"] = "unwritable"
 			overall = "degraded"
-			applogger.Printf("Readiness check: notes_dir unwritable: %v", err)
+			logger.Printf("Readiness check: notes_dir unwritable: %v", err)
 		} else {
 			tmpPath := f.Name()
 			f.Close()
@@ -106,8 +107,8 @@ func (h *SystemHandler) GetConfig(c *fiber.Ctx) error {
 		Name:           h.config.App.Name,
 		Version:        h.config.App.Version,
 		SearchEnabled:  h.config.Search.Enabled,
-		DemoMode:       config.DemoMode,
-		AlreadyDonated: config.AlreadyDonated,
+		DemoMode:       h.config.DemoMode,
+		AlreadyDonated: h.config.AlreadyDonated,
 		Authentication: struct {
 			Enabled bool `json:"enabled"`
 		}{
@@ -140,4 +141,15 @@ self.addEventListener('fetch', (e) => {
 
 	c.Set("Content-Type", "application/javascript")
 	return c.Send(content)
+}
+
+func (h *SystemHandler) RegisterRoutes(app *fiber.App) {
+	app.Get("/health", h.HealthCheck)
+	app.Get("/healthz", h.HealthCheck)
+	app.Get("/readyz", h.ReadinessCheck)
+	app.Get("/sw.js", middleware.EndpointLimiterSimple(30), h.ServiceWorker)
+}
+
+func (h *SystemHandler) RegisterAPIRoutes(api fiber.Router) {
+	api.Get("/config", h.GetConfig)
 }

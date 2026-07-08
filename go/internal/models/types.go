@@ -102,22 +102,23 @@ type GraphNode struct {
 }
 
 	// GraphEdge represents an edge in the knowledge graph
-	type GraphEdge struct {
-		Source string `json:"source"`
-		Target string `json:"target"`
-		Type   string `json:"type"`
-	}
+type GraphEdge struct {
+	Source string `json:"source"`
+	Target string `json:"target"`
+	Type   string `json:"type"`
+}
 
-	// GraphData represents the complete knowledge graph
-	type GraphData struct {
-		Nodes []GraphNode `json:"nodes"`
-		Edges []GraphEdge `json:"edges"`
-	}
+// GraphData represents the complete knowledge graph
+type GraphData struct {
+	Nodes []GraphNode `json:"nodes"`
+	Edges []GraphEdge `json:"edges"`
+}
 
-	// APIResponse represents a generic API response
-	type APIResponse struct {
-	Success bool   `json:"success"`
-	Message string `json:"message,omitempty"`
+// APIResponse represents a generic API response
+type APIResponse struct {
+	Success bool        `json:"success"`
+	Message string      `json:"message,omitempty"`
+	Data    interface{} `json:"data,omitempty"`
 }
 
 // NoteSaveResponse represents response from saving a note

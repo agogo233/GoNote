@@ -80,3 +80,7 @@ func (h *SearchHandler) Search(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{"results": results})
 	}
 }
+
+func (h *SearchHandler) RegisterRoutes(api fiber.Router) {
+	api.Get("/search", h.Search)
+}

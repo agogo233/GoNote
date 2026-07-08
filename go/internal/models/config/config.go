@@ -21,6 +21,8 @@ type Config struct {
 	Cache          CacheConfig     `yaml:"cache"`
 	RateLimit      RateLimitConfig `yaml:"rate_limit"`
 	Upload         UploadConfig    `yaml:"upload"`
+	DemoMode       bool            `yaml:"-"` // Set from DEMO_MODE env var
+	AlreadyDonated bool            `yaml:"-"` // Set from ALREADY_DONATED env var
 }
 
 // UploadConfig holds file upload settings
@@ -87,13 +89,6 @@ type CacheConfig struct {
 	ScanInterval  int `yaml:"scan_interval"`  // background scan interval in seconds (default: 30)
 }
 
-// Global flags set from environment variables
-var (
-	DemoMode       bool
-	AlreadyDonated bool
-	GlobalConfig   *Config // Global config reference for middleware access
-)
-
 // Load reads configuration from YAML file and applies environment variable overrides
 func Load(configPath string) (*Config, error) {
 	// Read config file
@@ -125,9 +120,6 @@ func Load(configPath string) (*Config, error) {
 
 	// Auto-detect HTTPS and set secure_cookie if needed
 	DetectHTTPSAndSetSecureCookie(cfg)
-
-	// Set global config reference for middleware access
-	GlobalConfig = cfg
 
 	return cfg, nil
 }
@@ -299,10 +291,10 @@ func applyEnvOverrides(cfg *Config) {
 
 	// ========== 演示模式 ==========
 	// DEMO_MODE
-	DemoMode = strings.ToLower(os.Getenv("DEMO_MODE")) == "true"
+	cfg.DemoMode = strings.ToLower(os.Getenv("DEMO_MODE")) == "true"
 
 	// ALREADY_DONATED
-	AlreadyDonated = strings.ToLower(os.Getenv("ALREADY_DONATED")) == "true"
+	cfg.AlreadyDonated = strings.ToLower(os.Getenv("ALREADY_DONATED")) == "true"
 
 	// ========== 代理配置 ==========
 	// PROXY_HEADER override (e.g. "X-Forwarded-For")

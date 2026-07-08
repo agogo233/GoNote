@@ -6,6 +6,7 @@ import (
 	"gonote/internal/models/config"
 	"gonote/internal/models"
 	"gonote/internal/services"
+	"gonote/internal/middleware"
 )
 
 // TemplateHandler handles template-related requests
@@ -35,7 +36,7 @@ func (h *TemplateHandler) Get(c *fiber.Ctx) error {
 
 	content, err := h.service.GetTemplateContent(templateName)
 	if err != nil {
-		return c.Status(404).JSON(fiber.Map{"detail": "Template not found"})
+		return c.Status(404).JSON(models.APIResponse{Success: false, Message: "Template not found"})
 	}
 
 	return c.JSON(fiber.Map{
@@ -52,7 +53,7 @@ func (h *TemplateHandler) CreateFromTemplate(c *fiber.Ctx) error {
 	}
 
 	if err := c.BodyParser(&req); err != nil {
-		return c.Status(400).JSON(fiber.Map{"detail": "Invalid request body"})
+		return c.Status(400).JSON(models.APIResponse{Success: false, Message: "Invalid request body"})
 	}
 
 	notePath, err := h.service.CreateNoteFromTemplate(req.TemplateName, req.NotePath)
@@ -60,9 +61,15 @@ func (h *TemplateHandler) CreateFromTemplate(c *fiber.Ctx) error {
 		return fiber.NewError(500, err.Error())
 	}
 
-	return c.JSON(fiber.Map{
-		"success":  true,
-		"notePath": notePath,
-		"message":  "Note created from template",
+	return c.JSON(models.NoteSaveResponse{
+		Success: true,
+		Path:    notePath,
+		Message: "Note created from template",
 	})
+}
+
+func (h *TemplateHandler) RegisterRoutes(api fiber.Router) {
+	api.Get("/templates", middleware.EndpointLimiterSimple(120), h.List)
+	api.Get("/templates/*", middleware.EndpointLimiterSimple(120), h.Get)
+	api.Post("/templates/create-note", middleware.EndpointLimiterSimple(60), h.CreateFromTemplate)
 }

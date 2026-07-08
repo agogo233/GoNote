@@ -29,12 +29,9 @@ type WSManager struct {
 	maxConnections int       // Maximum concurrent connections (0 = unlimited)
 }
 
-// Global WebSocket manager instance
-var wsManager *WSManager
-
-// InitWSManager initializes the global WebSocket manager
+// InitWSManager initializes and returns a new WebSocket manager
 func InitWSManager(maxConnections int) *WSManager {
-	wsManager = &WSManager{
+	wm := &WSManager{
 		connections:    make(map[*websocket.Conn]bool),
 		broadcast:      make(chan WSMessage, 100),
 		register:       make(chan *websocket.Conn, 10),
@@ -48,14 +45,9 @@ func InitWSManager(maxConnections int) *WSManager {
 				logger.Printf("WebSocket manager goroutine panic recovered: %v", r)
 			}
 		}()
-		wsManager.run()
+		wm.run()
 	}()
-	return wsManager
-}
-
-// GetWSManager returns the global WebSocket manager
-func GetWSManager() *WSManager {
-	return wsManager
+	return wm
 }
 
 // Stop gracefully shuts down the WebSocket manager.
@@ -240,8 +232,8 @@ func (m *WSManager) Unregister(conn *websocket.Conn) {
 }
 
 // BroadcastNotesUpdated notifies clients that notes have been updated
-func BroadcastNotesUpdated() {
-	if wsManager != nil {
-		wsManager.Broadcast("notes_updated", nil)
+func BroadcastNotesUpdated(wm *WSManager) {
+	if wm != nil {
+		wm.Broadcast("notes_updated", nil)
 	}
 }

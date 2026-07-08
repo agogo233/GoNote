@@ -5,13 +5,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
 
 	"gonote/internal/models"
+	"gonote/internal/models/logger"
 )
 
 // ShareService handles share token operations
@@ -63,9 +63,9 @@ func (s *ShareService) loadTokens() (map[string]models.ShareToken, error) {
 		// silently losing all share links.
 		backup := fmt.Sprintf("%s.broken.%d", tokensFile, time.Now().Unix())
 		if renameErr := os.Rename(tokensFile, backup); renameErr != nil {
-			log.Printf("[share] tokens file corrupt AND backup failed: %v (orig error: %v)", renameErr, err)
+			logger.Errorf("[share] tokens file corrupt AND backup failed: %v (orig error: %v)", renameErr, err)
 		} else {
-			log.Printf("[share] tokens file corrupt, backed up to %s (error: %v)", backup, err)
+			logger.Errorf("[share] tokens file corrupt, backed up to %s (error: %v)", backup, err)
 		}
 		return make(map[string]models.ShareToken), nil
 	}

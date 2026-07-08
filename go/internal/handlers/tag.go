@@ -49,3 +49,8 @@ func (h *TagHandler) GetNotesByTag(c *fiber.Ctx) error {
 		Notes: notes,
 	})
 }
+
+func (h *TagHandler) RegisterRoutes(api fiber.Router) {
+	api.Get("/tags", h.List)
+	api.Get("/tags/*", h.GetNotesByTag)
+}

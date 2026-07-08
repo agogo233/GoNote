@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"fmt"
-	"net/url"
 	"path/filepath"
 	"strings"
 
@@ -11,6 +10,7 @@ import (
 	"gonote/internal/models/config"
 	"gonote/internal/models"
 	"gonote/internal/services"
+	"gonote/internal/middleware"
 )
 
 // ShareHandler handles share-related requests
@@ -33,16 +33,9 @@ func NewShareHandler(shareService *services.ShareService, exportService *service
 
 // Create creates a share token for a note
 func (h *ShareHandler) Create(c *fiber.Ctx) error {
-	notePath := c.Params("*")
-	// Decode URL-encoded path (for Chinese and other special characters)
-	decodedPath, err := url.PathUnescape(notePath)
-	if err == nil {
-		notePath = decodedPath
-	}
-
-	// Security check - prevent directory traversal
-	if !services.ValidatePathSecurity(h.config.Storage.NotesDir, notePath) {
-		return c.Status(400).JSON(fiber.Map{"success": false, "detail": "Invalid note path"})
+	notePath, ok := resolvePathParam(c, h.config.Storage.NotesDir)
+	if !ok {
+		return nil
 	}
 
 	theme := c.Query("theme", "light")
@@ -71,15 +64,9 @@ func (h *ShareHandler) Create(c *fiber.Ctx) error {
 
 // GetStatus returns share status for a note
 func (h *ShareHandler) GetStatus(c *fiber.Ctx) error {
-	notePath := c.Params("*")
-	// Decode URL-encoded path (for Chinese and other special characters)
-	if decodedPath, err := url.PathUnescape(notePath); err == nil {
-		notePath = decodedPath
-	}
-
-	// Security check - prevent directory traversal
-	if !services.ValidatePathSecurity(h.config.Storage.NotesDir, notePath) {
-		return c.Status(400).JSON(fiber.Map{"success": false, "detail": "Invalid note path"})
+	notePath, ok := resolvePathParam(c, h.config.Storage.NotesDir)
+	if !ok {
+		return nil
 	}
 
 	info, err := h.shareService.GetShareInfo(notePath)
@@ -102,15 +89,9 @@ func (h *ShareHandler) GetStatus(c *fiber.Ctx) error {
 
 // Revoke revokes a share token
 func (h *ShareHandler) Revoke(c *fiber.Ctx) error {
-	notePath := c.Params("*")
-	// Decode URL-encoded path (for Chinese and other special characters)
-	if decodedPath, err := url.PathUnescape(notePath); err == nil {
-		notePath = decodedPath
-	}
-
-	// Security check - prevent directory traversal
-	if !services.ValidatePathSecurity(h.config.Storage.NotesDir, notePath) {
-		return c.Status(400).JSON(fiber.Map{"success": false, "detail": "Invalid note path"})
+	notePath, ok := resolvePathParam(c, h.config.Storage.NotesDir)
+	if !ok {
+		return nil
 	}
 
 	if err := h.shareService.RevokeShareToken(notePath); err != nil {
@@ -190,6 +171,14 @@ func (h *ShareHandler) ViewSharedNote(c *fiber.Ctx) error {
 
 	c.Set("Content-Type", "text/html; charset=utf-8")
 	return c.SendString(html)
+}
+
+func (h *ShareHandler) RegisterRoutes(api fiber.Router, app *fiber.App) {
+	api.Post("/share/*", middleware.EndpointLimiterSimple(30), h.Create)
+	api.Get("/share/*", middleware.EndpointLimiterSimple(120), h.GetStatus)
+	api.Delete("/share/*", middleware.EndpointLimiterSimple(30), h.Revoke)
+	api.Get("/shared-notes", middleware.EndpointLimiterSimple(60), h.ListSharedNotes)
+	app.Get("/share/:token", middleware.EndpointLimiterSimple(60), h.ViewSharedNote)
 }
 
 

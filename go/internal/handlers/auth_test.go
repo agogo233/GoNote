@@ -141,7 +141,7 @@ func TestAuthHandler_Login(t *testing.T) {
 		var result map[string]interface{}
 		json.NewDecoder(resp.Body).Decode(&result)
 		assert.False(t, result["success"].(bool))
-		assert.Contains(t, result["detail"], "Invalid password")
+		assert.Contains(t, result["message"], "Invalid password")
 	})
 
 	t.Run("returns error with invalid request body", func(t *testing.T) {

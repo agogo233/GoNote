@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"gonote/internal/models"
+	"gonote/internal/models/logger"
 )
 
 var ErrConflict = errors.New("note conflict: modified by another source")
@@ -239,10 +240,10 @@ func (s *NoteService) doScan(includeMedia bool) ([]models.Note, []string) {
 	// Log walk errors if any
 	if len(walkErrors) > 0 {
 		for _, errMsg := range walkErrors[:min(len(walkErrors), 10)] {
-			fmt.Printf("Warning: %s\n", errMsg)
+			logger.Warnf("Warning: %s", errMsg)
 		}
 		if len(walkErrors) > 10 {
-			fmt.Printf("Warning: ... and %d more walk errors\n", len(walkErrors)-10)
+			logger.Warnf("Warning: ... and %d more walk errors", len(walkErrors)-10)
 		}
 	}
 
@@ -337,10 +338,10 @@ func (s *NoteService) doScanBoth() (allNotes, notesOnly []models.Note, folders [
 
 	if len(walkErrors) > 0 {
 		for _, errMsg := range walkErrors[:min(len(walkErrors), 10)] {
-			fmt.Printf("Warning: %s\n", errMsg)
+			logger.Warnf("Warning: %s", errMsg)
 		}
 		if len(walkErrors) > 10 {
-			fmt.Printf("Warning: ... and %d more walk errors\n", len(walkErrors)-10)
+			logger.Warnf("Warning: ... and %d more walk errors", len(walkErrors)-10)
 		}
 	}
 
@@ -510,7 +511,11 @@ func (s *NoteService) DeleteNote(notePath string) error {
 	// Fine-grained cache invalidation
 	s.invalidateNoteCache(notePath)
 
-	return os.Remove(fullPath)
+	err := os.Remove(fullPath)
+	if err == nil {
+		s.pathMu.Delete(notePath)
+	}
+	return err
 }
 
 // MoveNote moves a note to a new location and updates all wikilink references
@@ -554,6 +559,9 @@ func (s *NoteService) MoveNote(oldPath, newPath string) error {
 	// Fine-grained cache invalidation for both paths
 	s.invalidateNoteCache(oldPath)
 	s.invalidateNoteCache(newPath)
+
+	s.pathMu.Delete(oldPath)
+	s.pathMu.Delete(newPath)
 
 	return nil
 }
@@ -806,7 +814,7 @@ func (s *NoteService) StartBackgroundScanner() {
 			defer close(s.ready) // 必须先于 recover 的 defer 注册，确保 panic 时仍执行
 			defer func() {
 				if r := recover(); r != nil {
-					fmt.Printf("Background scanner panic recovered: %v\n", r)
+					logger.Errorf("Background scanner panic recovered: %v", r)
 				}
 			}()
 			s.performScan()
@@ -824,7 +832,7 @@ func (s *NoteService) StartBackgroundScanner() {
 				func() {
 					defer func() {
 						if r := recover(); r != nil {
-							fmt.Printf("Background scanner panic recovered during scheduled scan: %v\n", r)
+							logger.Errorf("Background scanner panic recovered during scheduled scan: %v", r)
 							// Continue running - don't let one panic stop the scanner
 						}
 					}()
@@ -835,7 +843,7 @@ func (s *NoteService) StartBackgroundScanner() {
 				func() {
 					defer func() {
 						if r := recover(); r != nil {
-							fmt.Printf("Background scanner panic recovered during scheduled scan: %v\n", r)
+							logger.Errorf("Background scanner panic recovered during scheduled scan: %v", r)
 							// Continue running - don't let one panic stop the scanner
 						}
 					}()
@@ -978,7 +986,7 @@ func (s *NoteService) WaitForReady() {
 	select {
 	case <-s.ready:
 	case <-time.After(30 * time.Second):
-		fmt.Printf("Warn: WaitForReady timed out after 30s, serving possibly stale data\n")
+		logger.Warnf("Warn: WaitForReady timed out after 30s, serving possibly stale data")
 	}
 }
 

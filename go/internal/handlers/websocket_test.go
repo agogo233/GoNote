@@ -18,10 +18,6 @@ func TestWSManager_InitAndStop(t *testing.T) {
 		t.Fatal("InitWSManager returned nil")
 	}
 	
-	if GetWSManager() != manager {
-		t.Error("GetWSManager should return the same instance")
-	}
-	
 	// Stop should not panic when called once
 	manager.Stop()
 	
@@ -323,13 +319,11 @@ func TestWSManager_DoubleStop(t *testing.T) {
 }
 
 func TestBroadcastNotesUpdated(t *testing.T) {
-	// Test with nil manager (before InitWSManager is called)
-	wsManager = nil
-	// Should not panic
-	BroadcastNotesUpdated()
+	// Test with nil manager
+	BroadcastNotesUpdated(nil)
 	
 	// Test with initialized manager
-	wsManager = &WSManager{
+	manager := &WSManager{
 		connections:    make(map[*websocket.Conn]bool),
 		broadcast:      make(chan WSMessage, 100),
 		register:       make(chan *websocket.Conn, 10),
@@ -337,13 +331,13 @@ func TestBroadcastNotesUpdated(t *testing.T) {
 		stop:           make(chan struct{}),
 		maxConnections: 0,
 	}
-	go wsManager.run()
-	defer wsManager.Stop()
+	go manager.run()
+	defer manager.Stop()
 	
 	// Should send to broadcast channel
 	done := make(chan bool, 1)
 	go func() {
-		BroadcastNotesUpdated()
+		BroadcastNotesUpdated(manager)
 		done <- true
 	}()
 	

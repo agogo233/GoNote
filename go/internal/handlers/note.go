@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"errors"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,6 +12,7 @@ import (
 	"gonote/internal/models/config"
 	"gonote/internal/models"
 	"gonote/internal/services"
+	"gonote/internal/middleware"
 )
 
 type NoteHandler struct {
@@ -63,19 +63,9 @@ func (h *NoteHandler) List(c *fiber.Ctx) error {
 
 // Get returns a single note or creates a new one
 func (h *NoteHandler) Get(c *fiber.Ctx) error {
-	notePath := c.Params("*")
-	notePath = strings.TrimPrefix(notePath, "/")
-
-	// URL decode the path to handle special characters (Chinese, emoji, etc.)
-	decodedPath, err := url.PathUnescape(notePath)
-	if err != nil {
-		return c.Status(400).JSON(fiber.Map{"detail": "Invalid path encoding"})
-	}
-	notePath = decodedPath
-
-	// Security check
-	if !services.ValidatePathSecurity(h.config.Storage.NotesDir, notePath) {
-		return c.Status(400).JSON(fiber.Map{"detail": "Invalid path"})
+	notePath, ok := resolvePathParamTrimmed(c, h.config.Storage.NotesDir)
+	if !ok {
+		return nil
 	}
 
 	// Check if note exists
@@ -107,24 +97,14 @@ func (h *NoteHandler) Get(c *fiber.Ctx) error {
 
 // CreateOrUpdate creates or updates a note
 func (h *NoteHandler) CreateOrUpdate(c *fiber.Ctx) error {
-	notePath := c.Params("*")
-	notePath = strings.TrimPrefix(notePath, "/")
-
-	// URL decode the path to handle special characters (Chinese, emoji, etc.)
-	decodedPath, err := url.PathUnescape(notePath)
-	if err != nil {
-		return c.Status(400).JSON(fiber.Map{"detail": "Invalid path encoding"})
+	notePath, ok := resolvePathParamTrimmed(c, h.config.Storage.NotesDir)
+	if !ok {
+		return nil
 	}
-	notePath = decodedPath
 
 	// Handle /notes/move specially - redirect to Move handler
 	if notePath == "move" {
 		return h.Move(c)
-	}
-
-	// Security check
-	if !services.ValidatePathSecurity(h.config.Storage.NotesDir, notePath) {
-		return c.Status(400).JSON(fiber.Map{"detail": "Invalid path"})
 	}
 
 	// Parse request body
@@ -137,7 +117,7 @@ func (h *NoteHandler) CreateOrUpdate(c *fiber.Ctx) error {
 	}
 
 	// Save note with optional mtime-based optimistic lock
-	err = h.service.SaveNoteWithCheck(notePath, req.Content, req.Modified)
+	err := h.service.SaveNoteWithCheck(notePath, req.Content, req.Modified)
 	if err != nil {
 		if errors.Is(err, services.ErrConflict) {
 			fullPath := filepath.Join(h.config.Storage.NotesDir, notePath)
@@ -182,19 +162,9 @@ func (h *NoteHandler) CreateOrUpdate(c *fiber.Ctx) error {
 
 // Delete deletes a note
 func (h *NoteHandler) Delete(c *fiber.Ctx) error {
-	notePath := c.Params("*")
-	notePath = strings.TrimPrefix(notePath, "/")
-
-	// URL decode the path to handle special characters (Chinese, emoji, etc.)
-	decodedPath, err := url.PathUnescape(notePath)
-	if err != nil {
-		return c.Status(400).JSON(fiber.Map{"detail": "Invalid path encoding"})
-	}
-	notePath = decodedPath
-
-	// Security check
-	if !services.ValidatePathSecurity(h.config.Storage.NotesDir, notePath) {
-		return c.Status(400).JSON(fiber.Map{"detail": "Invalid path"})
+	notePath, ok := resolvePathParamTrimmed(c, h.config.Storage.NotesDir)
+	if !ok {
+		return nil
 	}
 
 	if err := h.service.DeleteNote(notePath); err != nil {
@@ -282,18 +252,9 @@ func (h *NoteHandler) GetNotesDir() string {
 }
 
 func (h *NoteHandler) GetAttachments(c *fiber.Ctx) error {
-	notePath := c.Params("*")
-	notePath = strings.TrimPrefix(notePath, "/")
-
-	// URL decode the path to handle special characters (Chinese, emoji, etc.)
-	decodedPath, err := url.PathUnescape(notePath)
-	if err != nil {
-		return c.Status(400).JSON(fiber.Map{"detail": "Invalid path encoding"})
-	}
-	notePath = decodedPath
-
-	if !services.ValidatePathSecurity(h.config.Storage.NotesDir, notePath) {
-		return c.Status(400).JSON(fiber.Map{"detail": "Invalid path"})
+	notePath, ok := resolvePathParamTrimmed(c, h.config.Storage.NotesDir)
+	if !ok {
+		return nil
 	}
 
 	attachments, err := h.service.GetAttachments(notePath)
@@ -306,4 +267,13 @@ func (h *NoteHandler) GetAttachments(c *fiber.Ctx) error {
 		Attachments: attachments,
 		Count:       len(attachments),
 	})
+}
+
+func (h *NoteHandler) RegisterRoutes(api fiber.Router) {
+	api.Get("/notes", h.List)
+	api.Post("/notes/move", middleware.EndpointLimiterSimple(30), h.Move)
+	api.Get("/notes/attachments/*", h.GetAttachments)
+	api.Get("/notes/*", h.Get)
+	api.Post("/notes/*", middleware.EndpointLimiterSimple(60), h.CreateOrUpdate)
+	api.Delete("/notes/*", middleware.EndpointLimiterSimple(30), h.Delete)
 }

@@ -1,13 +1,12 @@
 package handlers
 
 import (
-	"net/url"
-
 	"github.com/gofiber/fiber/v2"
 
 	"gonote/internal/models/config"
 	"gonote/internal/models"
 	"gonote/internal/services"
+	"gonote/internal/middleware"
 )
 
 // CacheInvalidator interface for cache invalidation
@@ -42,8 +41,8 @@ func (h *FolderHandler) Create(c *fiber.Ctx) error {
 	}
 
 	// Security check
-	if !services.ValidatePathSecurity(h.config.Storage.NotesDir, req.Path) {
-		return c.Status(400).JSON(fiber.Map{"detail": "Invalid path"})
+	if !validatePath(c, h.config.Storage.NotesDir, req.Path) {
+		return nil
 	}
 
 	if err := services.CreateFolder(h.config.Storage.NotesDir, req.Path); err != nil {
@@ -64,20 +63,12 @@ func (h *FolderHandler) Create(c *fiber.Ctx) error {
 
 // Delete deletes a folder
 func (h *FolderHandler) Delete(c *fiber.Ctx) error {
-	folderPath := c.Params("*")
-
-	// URL decode the path to handle special characters (Chinese, emoji, etc.)
-	decodedPath, err := url.PathUnescape(folderPath)
-	if err != nil {
-		return c.Status(400).JSON(fiber.Map{"detail": "Invalid path encoding"})
+	folderPath, ok := resolvePathParam(c, h.config.Storage.NotesDir)
+	if !ok {
+		return nil
 	}
 
-	// Security check
-	if !services.ValidatePathSecurity(h.config.Storage.NotesDir, decodedPath) {
-		return c.Status(400).JSON(fiber.Map{"detail": "Invalid path"})
-	}
-
-	if err := services.DeleteFolder(h.config.Storage.NotesDir, decodedPath); err != nil {
+	if err := services.DeleteFolder(h.config.Storage.NotesDir, folderPath); err != nil {
 		return fiber.NewError(500, err.Error())
 	}
 
@@ -87,7 +78,7 @@ func (h *FolderHandler) Delete(c *fiber.Ctx) error {
 
 	return c.JSON(models.FolderResponse{
 		Success: true,
-		Path:    decodedPath,
+		Path:    folderPath,
 		Message: "Folder deleted successfully",
 	})
 }
@@ -104,9 +95,9 @@ func (h *FolderHandler) Move(c *fiber.Ctx) error {
 	}
 
 	// Security checks
-	if !services.ValidatePathSecurity(h.config.Storage.NotesDir, req.OldPath) ||
-		!services.ValidatePathSecurity(h.config.Storage.NotesDir, req.NewPath) {
-		return c.Status(400).JSON(fiber.Map{"detail": "Invalid path"})
+	if !validatePath(c, h.config.Storage.NotesDir, req.OldPath) ||
+		!validatePath(c, h.config.Storage.NotesDir, req.NewPath) {
+		return nil
 	}
 
 	// Update all wikilink references before moving
@@ -140,9 +131,9 @@ func (h *FolderHandler) Rename(c *fiber.Ctx) error {
 	}
 
 	// Security checks
-	if !services.ValidatePathSecurity(h.config.Storage.NotesDir, req.OldPath) ||
-		!services.ValidatePathSecurity(h.config.Storage.NotesDir, req.NewPath) {
-		return c.Status(400).JSON(fiber.Map{"detail": "Invalid path"})
+	if !validatePath(c, h.config.Storage.NotesDir, req.OldPath) ||
+		!validatePath(c, h.config.Storage.NotesDir, req.NewPath) {
+		return nil
 	}
 
 	// Update all wikilink references before renaming
@@ -162,4 +153,11 @@ func (h *FolderHandler) Rename(c *fiber.Ctx) error {
 		Path:    req.NewPath,
 		Message: "Folder renamed successfully",
 	})
+}
+
+func (h *FolderHandler) RegisterRoutes(api fiber.Router) {
+	api.Post("/folders", middleware.EndpointLimiterSimple(30), h.Create)
+	api.Post("/folders/move", middleware.EndpointLimiterSimple(20), h.Move)
+	api.Post("/folders/rename", middleware.EndpointLimiterSimple(30), h.Rename)
+	api.Delete("/folders/*", middleware.EndpointLimiterSimple(20), h.Delete)
 }

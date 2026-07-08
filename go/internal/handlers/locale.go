@@ -44,3 +44,8 @@ func (h *LocaleHandler) Get(c *fiber.Ctx) error {
 
 	return c.JSON(content)
 }
+
+func (h *LocaleHandler) RegisterRoutes(app *fiber.App) {
+	app.Get("/api/locales", h.List)
+	app.Get("/api/locales/:code", h.Get)
+}

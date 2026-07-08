@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 
 	"gonote/internal/models"
 )
@@ -16,7 +17,8 @@ const ContextWindowSize = 50
 // SearchService handles search operations
 type SearchService struct {
 	notesDir    string
-	noteService *NoteService // shared NoteService for cache reuse; nil = create new each time
+	noteService *NoteService
+	regexCache  sync.Map
 }
 
 // NewSearchService creates a new SearchService.
@@ -27,6 +29,19 @@ func NewSearchService(notesDir string, noteService ...*NoteService) *SearchServi
 		s.noteService = noteService[0]
 	}
 	return s
+}
+
+// getOrCompileRegex 从缓存中获取已编译的正则，避免热路径上反复编译。
+func (s *SearchService) getOrCompileRegex(pattern string) (*regexp.Regexp, error) {
+	if cached, ok := s.regexCache.Load(pattern); ok {
+		return cached.(*regexp.Regexp), nil
+	}
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		return nil, err
+	}
+	s.regexCache.Store(pattern, re)
+	return re, nil
 }
 
 // Search performs full-text search through note contents
@@ -46,7 +61,7 @@ func (s *SearchService) Search(query string) ([]models.SearchResult, error) {
 	escapedQuery := regexp.QuoteMeta(query)
 
 	// Case-insensitive pattern
-	pattern, err := regexp.Compile("(?i)" + escapedQuery)
+	pattern, err := s.getOrCompileRegex("(?i)" + escapedQuery)
 	if err != nil {
 		return nil, err
 	}

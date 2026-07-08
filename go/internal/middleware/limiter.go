@@ -9,8 +9,7 @@ import (
 )
 
 // RateLimiter creates a global rate limiter based on config settings
-func RateLimiter() fiber.Handler {
-	cfg := config.GlobalConfig
+func RateLimiter(cfg *config.Config) fiber.Handler {
 	if cfg == nil || !cfg.RateLimit.Enabled {
 		return func(c *fiber.Ctx) error {
 			return c.Next()

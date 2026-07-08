@@ -13,6 +13,7 @@ import (
 	"gonote/internal/models/config"
 	"gonote/internal/models"
 	"gonote/internal/services"
+	"gonote/internal/middleware"
 )
 
 // MediaHandler handles media-related requests
@@ -77,8 +78,8 @@ func (h *MediaHandler) Get(c *fiber.Ctx) error {
 	mediaPath := c.Params("*")
 
 	// Security check
-	if !services.ValidatePathSecurity(h.config.Storage.NotesDir, mediaPath) {
-		return c.Status(400).JSON(fiber.Map{"detail": "Invalid path"})
+	if !validatePath(c, h.config.Storage.NotesDir, mediaPath) {
+		return nil
 	}
 
 	// Deny hidden files and sensitive system files
@@ -187,9 +188,9 @@ func (h *MediaHandler) Move(c *fiber.Ctx) error {
 	}
 
 	// Security checks
-	if !services.ValidatePathSecurity(h.config.Storage.NotesDir, req.OldPath) ||
-		!services.ValidatePathSecurity(h.config.Storage.NotesDir, req.NewPath) {
-		return c.Status(400).JSON(fiber.Map{"detail": "Invalid path"})
+	if !validatePath(c, h.config.Storage.NotesDir, req.OldPath) ||
+		!validatePath(c, h.config.Storage.NotesDir, req.NewPath) {
+		return nil
 	}
 
 	if err := h.service.MoveMedia(req.OldPath, req.NewPath); err != nil {
@@ -288,6 +289,14 @@ func (h *MediaHandler) CleanupOrphanedMedia(c *fiber.Ctx) error {
 		FreedSpace:   freedSpace,
 		Message:      message,
 	})
+}
+
+func (h *MediaHandler) RegisterRoutes(api fiber.Router) {
+	api.Get("/media/orphaned", h.ListOrphanedMedia)
+	api.Delete("/media/orphaned", h.CleanupOrphanedMedia)
+	api.Post("/media/move", middleware.EndpointLimiterSimple(30), h.Move)
+	api.Get("/media/*", h.Get)
+	api.Post("/upload-media", middleware.EndpointLimiterSimple(20), h.Upload)
 }
 
 

@@ -66,3 +66,43 @@ func PrintError(format string, v ...interface{}) {
 		fmt.Fprintf(os.Stderr, format, v...)
 	}
 }
+
+type Level int
+
+const (
+	DEBUG Level = iota
+	INFO
+	WARN
+	ERROR
+)
+
+var level = INFO
+
+func SetLevel(l Level) { level = l }
+
+func levelToString(l Level) string {
+	switch l {
+	case DEBUG:
+		return "DEBUG"
+	case INFO:
+		return "INFO"
+	case WARN:
+		return "WARN"
+	case ERROR:
+		return "ERROR"
+	default:
+		return "UNKNOWN"
+	}
+}
+
+func (l *Logger) logf(lvl Level, format string, v ...interface{}) {
+	if !l.enabled || lvl < level {
+		return
+	}
+	log.Output(3, fmt.Sprintf("[%s] %s", levelToString(lvl), fmt.Sprintf(format, v...)))
+}
+
+func Debugf(format string, v ...interface{})   { globalLogger.logf(DEBUG, format, v...) }
+func Infof(format string, v ...interface{})    { globalLogger.logf(INFO, format, v...) }
+func Warnf(format string, v ...interface{})    { globalLogger.logf(WARN, format, v...) }
+func Errorf(format string, v ...interface{})   { globalLogger.logf(ERROR, format, v...) }
