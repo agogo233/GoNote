@@ -147,8 +147,12 @@ func (s *ShareService) CreateShareTokenWithTTL(notePath, theme string, ttl time.
 		if info.Path == notePath {
 			if ttl > 0 {
 				info.ExpiresAt = time.Now().Add(ttl).UTC().Format(time.RFC3339)
-				tokens[token] = info
-				if saveErr := s.saveTokens(tokens); saveErr != nil {
+				newTokens := make(map[string]models.ShareToken, len(tokens))
+				for k, v := range tokens {
+					newTokens[k] = v
+				}
+				newTokens[token] = info
+				if saveErr := s.saveTokens(newTokens); saveErr != nil {
 					return "", saveErr
 				}
 			}
@@ -180,9 +184,14 @@ func (s *ShareService) CreateShareTokenWithTTL(notePath, theme string, ttl time.
 	if ttl > 0 {
 		st.ExpiresAt = time.Now().Add(ttl).UTC().Format(time.RFC3339)
 	}
-	tokens[token] = st
 
-	if err := s.saveTokens(tokens); err != nil {
+	newTokens := make(map[string]models.ShareToken, len(tokens)+1)
+	for k, v := range tokens {
+		newTokens[k] = v
+	}
+	newTokens[token] = st
+
+	if err := s.saveTokens(newTokens); err != nil {
 		return "", err
 	}
 
@@ -257,8 +266,13 @@ func (s *ShareService) RevokeShareToken(notePath string) error {
 	}
 
 	if tokenToRemove != "" {
-		delete(tokens, tokenToRemove)
-		return s.saveTokens(tokens)
+		newTokens := make(map[string]models.ShareToken, len(tokens)-1)
+		for k, v := range tokens {
+			if k != tokenToRemove {
+				newTokens[k] = v
+			}
+		}
+		return s.saveTokens(newTokens)
 	}
 
 	return fmt.Errorf("no share token found for note")
@@ -297,9 +311,13 @@ func (s *ShareService) UpdateTokenPath(oldPath, newPath string) error {
 
 	for token, info := range tokens {
 		if info.Path == oldPath {
+			newTokens := make(map[string]models.ShareToken, len(tokens))
+			for k, v := range tokens {
+				newTokens[k] = v
+			}
 			info.Path = newPath
-			tokens[token] = info
-			return s.saveTokens(tokens)
+			newTokens[token] = info
+			return s.saveTokens(newTokens)
 		}
 	}
 
