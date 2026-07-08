@@ -116,8 +116,9 @@ func (c *Cache) Get(key string) (interface{}, bool) {
 		c.mu.Unlock()
 		return nil, false
 	}
+	val := entry.value
 	c.mu.RUnlock()
-	return entry.value, true
+	return val, true
 }
 
 // Delete removes an item from the cache.
