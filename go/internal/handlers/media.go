@@ -81,6 +81,12 @@ func (h *MediaHandler) Get(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"detail": "Invalid path"})
 	}
 
+	// Deny hidden files and sensitive system files
+	baseFileName := filepath.Base(mediaPath)
+	if strings.HasPrefix(baseFileName, ".") {
+		return c.Status(403).JSON(fiber.Map{"detail": "Access denied"})
+	}
+
 	fullPath := filepath.Join(h.config.Storage.NotesDir, mediaPath)
 
 	// Check if file exists

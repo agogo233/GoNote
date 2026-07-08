@@ -16,7 +16,7 @@ import (
 
 func TestNewSystemHandler(t *testing.T) {
 	cfg := &config.Config{}
-	handler := NewSystemHandler(cfg)
+	handler := NewSystemHandler(cfg, "")
 
 	assert.NotNil(t, handler)
 	assert.Equal(t, cfg, handler.config)
@@ -29,7 +29,7 @@ func TestSystemHandler_HealthCheck(t *testing.T) {
 			Version: "0.25",
 		},
 	}
-	handler := NewSystemHandler(cfg)
+	handler := NewSystemHandler(cfg, "")
 
 	app := fiber.New()
 	app.Get("/health", handler.HealthCheck)
@@ -61,7 +61,7 @@ func TestSystemHandler_GetConfig(t *testing.T) {
 			Enabled: true,
 		},
 	}
-	handler := NewSystemHandler(cfg)
+	handler := NewSystemHandler(cfg, "")
 
 	app := fiber.New()
 	app.Get("/api/config", handler.GetConfig)
@@ -91,7 +91,7 @@ func TestSystemHandler_GetConfig_AuthDisabled(t *testing.T) {
 			Enabled: false,
 		},
 	}
-	handler := NewSystemHandler(cfg)
+	handler := NewSystemHandler(cfg, "")
 
 	app := fiber.New()
 	app.Get("/api/config", handler.GetConfig)
@@ -109,7 +109,6 @@ func TestSystemHandler_GetConfig_AuthDisabled(t *testing.T) {
 }
 
 func TestSystemHandler_ServiceWorker_FileExists(t *testing.T) {
-	// Create a temporary service worker file
 	tmpDir := t.TempDir()
 	swPath := filepath.Join(tmpDir, "frontend")
 	err := os.MkdirAll(swPath, 0755)
@@ -119,13 +118,12 @@ func TestSystemHandler_ServiceWorker_FileExists(t *testing.T) {
 	err = os.WriteFile(filepath.Join(swPath, "sw.js"), []byte(swContent), 0644)
 	assert.NoError(t, err)
 
-	// Change to temp directory
 	oldWd, _ := os.Getwd()
 	os.Chdir(tmpDir)
 	defer os.Chdir(oldWd)
 
 	cfg := &config.Config{}
-	handler := NewSystemHandler(cfg)
+	handler := NewSystemHandler(cfg, filepath.Join(tmpDir, "frontend"))
 
 	app := fiber.New()
 	app.Get("/sw.js", handler.ServiceWorker)
@@ -139,14 +137,13 @@ func TestSystemHandler_ServiceWorker_FileExists(t *testing.T) {
 }
 
 func TestSystemHandler_ServiceWorker_FileNotExists(t *testing.T) {
-	// Change to temp directory without service worker
 	tmpDir := t.TempDir()
 	oldWd, _ := os.Getwd()
 	os.Chdir(tmpDir)
 	defer os.Chdir(oldWd)
 
 	cfg := &config.Config{}
-	handler := NewSystemHandler(cfg)
+	handler := NewSystemHandler(cfg, tmpDir)
 
 	app := fiber.New()
 	app.Get("/sw.js", handler.ServiceWorker)

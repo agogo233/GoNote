@@ -20,6 +20,7 @@ type NoteHandler struct {
 	config      *config.Config
 	searchIndex *services.SearchIndex
 	tagService  *services.TagService
+	shareService *services.ShareService
 }
 
 func NewNoteHandler(service *services.NoteService, cfg *config.Config) *NoteHandler {
@@ -30,8 +31,8 @@ func NewNoteHandlerWithIndex(service *services.NoteService, cfg *config.Config, 
 	return &NoteHandler{service: service, config: cfg, searchIndex: searchIndex}
 }
 
-func NewNoteHandlerWithTagService(service *services.NoteService, tagService *services.TagService, cfg *config.Config, searchIndex *services.SearchIndex) *NoteHandler {
-	return &NoteHandler{service: service, tagService: tagService, config: cfg, searchIndex: searchIndex}
+func NewNoteHandlerWithTagService(service *services.NoteService, tagService *services.TagService, cfg *config.Config, searchIndex *services.SearchIndex, shareService *services.ShareService) *NoteHandler {
+	return &NoteHandler{service: service, tagService: tagService, config: cfg, searchIndex: searchIndex, shareService: shareService}
 }
 
 func (h *NoteHandler) List(c *fiber.Ctx) error {
@@ -92,12 +93,7 @@ func (h *NoteHandler) Get(c *fiber.Ctx) error {
 		})
 	}
 
-	content, err := h.service.GetNoteContent(notePath)
-	if err != nil {
-		return fiber.NewError(500, err.Error())
-	}
-
-	metadata, err := h.service.GetNoteMetadata(notePath)
+	content, metadata, err := h.service.GetNoteContentWithMetadata(notePath)
 	if err != nil {
 		return fiber.NewError(500, err.Error())
 	}
@@ -158,10 +154,7 @@ func (h *NoteHandler) CreateOrUpdate(c *fiber.Ctx) error {
 		return fiber.NewError(500, err.Error())
 	}
 
-	// Invalidate caches
-	h.service.InvalidateCache()
-	
-	// Also invalidate tag cache if tag service is available
+	// Invalidate tag cache if tag service is available
 	if h.tagService != nil {
 		h.tagService.ClearCache()
 	}
@@ -255,8 +248,9 @@ func (h *NoteHandler) Move(c *fiber.Ctx) error {
 	}
 
 	// Update share token if exists
-	shareService := services.NewShareService(h.config.Storage.NotesDir)
-	shareService.UpdateTokenPath(req.OldPath, req.NewPath)
+	if h.shareService != nil {
+		h.shareService.UpdateTokenPath(req.OldPath, req.NewPath)
+	}
 
 	// Update search index: remove old path, add new path
 	if h.searchIndex != nil {

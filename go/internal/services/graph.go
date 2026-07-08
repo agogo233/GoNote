@@ -17,24 +17,35 @@ var (
 	graphMdLinkRegex = regexp.MustCompile(`\[([^\]]+)\]\(([^)]+\.md)\)`)
 )
 
+type linkInfo struct {
+	Path string
+	Type string
+}
+
 // GraphService handles knowledge graph operations
 type GraphService struct {
 	notesDir    string
-	noteService *NoteService // shared NoteService for cache reuse; nil = create new each time
+	noteService *NoteService
+	linkIndex   *LinkIndex
 }
 
 // NewGraphService creates a new GraphService.
 // Pass a shared *NoteService to leverage caching; omit or pass nil to create a new one per request.
 func NewGraphService(notesDir string, noteService ...*NoteService) *GraphService {
 	s := &GraphService{notesDir: notesDir}
-	if len(noteService) > 0 {
-		s.noteService = noteService[0]
+	for _, ns := range noteService {
+		s.noteService = ns
 	}
 	return s
 }
 
 // GetGraph returns the knowledge graph data
 func (s *GraphService) GetGraph() (*models.GraphData, error) {
+	if s.linkIndex != nil && s.linkIndex.GetNodeCount() > 0 {
+		return s.linkIndex.GetGraph(), nil
+	}
+
+	// Fallback: build graph from disk (for tests or when index is empty)
 	ns := s.noteService
 	if ns == nil {
 		ns = NewNoteService(s.notesDir)
@@ -47,14 +58,12 @@ func (s *GraphService) GetGraph() (*models.GraphData, error) {
 	nodes := []models.GraphNode{}
 	edges := []models.GraphEdge{}
 
-	// Create nodes for each note
 	for _, note := range notes {
 		nodes = append(nodes, models.GraphNode{
 			ID:    note.Path,
 			Label: note.Name,
 		})
 
-		// Extract links from note content
 		fullPath := filepath.Join(s.notesDir, note.Path)
 		content, err := os.ReadFile(fullPath)
 		if err != nil {
@@ -65,8 +74,8 @@ func (s *GraphService) GetGraph() (*models.GraphData, error) {
 		for _, link := range links {
 			edges = append(edges, models.GraphEdge{
 				Source: note.Path,
-				Target: link,
-				Type:   "link",
+				Target: link.Path,
+				Type:   link.Type,
 			})
 		}
 	}
@@ -77,9 +86,14 @@ func (s *GraphService) GetGraph() (*models.GraphData, error) {
 	}, nil
 }
 
+// SetLinkIndex injects a shared LinkIndex for index-based reads.
+func (s *GraphService) SetLinkIndex(li *LinkIndex) {
+	s.linkIndex = li
+}
+
 // extractLinks extracts wikilinks and markdown links from content
-func (s *GraphService) extractLinks(content string) []string {
-	links := []string{}
+func (s *GraphService) extractLinks(content string) []linkInfo {
+	links := []linkInfo{}
 	seen := make(map[string]bool)
 
 	// Extract wikilinks: [[note]] or [[note|display text]]
@@ -89,7 +103,7 @@ func (s *GraphService) extractLinks(content string) []string {
 		// Resolve target to a path
 		resolved := s.resolveLink(target)
 		if resolved != "" && !seen[resolved] {
-			links = append(links, resolved)
+			links = append(links, linkInfo{Path: resolved, Type: "wikilink"})
 			seen[resolved] = true
 		}
 	}
@@ -101,7 +115,7 @@ func (s *GraphService) extractLinks(content string) []string {
 		// Resolve target to a path
 		resolved := s.resolveLink(target)
 		if resolved != "" && !seen[resolved] {
-			links = append(links, resolved)
+			links = append(links, linkInfo{Path: resolved, Type: "mdlink"})
 			seen[resolved] = true
 		}
 	}

@@ -71,6 +71,29 @@ func main() {
 		applogger.Println("   Set HTTPS=true or X_FORWARDED_PROTO=https env var, or set secure_cookie: true in config.yaml")
 	}
 
+	// Security warnings for disabled protections
+	if !cfg.Authentication.Enabled {
+		applogger.Println("")
+		applogger.Println("⚠️  SECURITY WARNING: Authentication is DISABLED!")
+		applogger.Println("   Anyone can access all notes, media, and settings.")
+		applogger.Println("   Enable authentication for any network-exposed deployment.")
+		applogger.Println("")
+	}
+
+	if len(cfg.Server.AllowedOrigins) == 1 && cfg.Server.AllowedOrigins[0] == "*" {
+		applogger.Println("")
+		applogger.Println("⚠️  SECURITY WARNING: CORS allows ALL origins (*)!")
+		applogger.Println("   Set allowed_origins to specific domains for production.")
+		applogger.Println("")
+	}
+
+	if !cfg.RateLimit.Enabled {
+		applogger.Println("")
+		applogger.Println("⚠️  SECURITY WARNING: Rate limiting is DISABLED!")
+		applogger.Println("   Enable rate_limit.enabled in config.yaml for production.")
+		applogger.Println("")
+	}
+
 	// Ensure required directories exist
 	if err := services.EnsureDirectories(cfg.Storage.NotesDir); err != nil {
 		applogger.Fatalf("Failed to create directories: %v", err)
@@ -193,6 +216,10 @@ func setupRoutes(app *fiber.App, cfg *config.Config) *services.NoteService {
 	noteService.StartCacheCleanup()      // Start cache cleanup goroutine
 	noteService.StartBackgroundScanner() // Start background scanner
 	
+	// Create shared link index and inject into NoteService
+	linkIndex := services.NewLinkIndex(cfg.Storage.NotesDir)
+	noteService.SetLinkIndex(linkIndex)
+
 	// Set callback to broadcast WebSocket message when scan completes
 	noteService.SetOnScanComplete(func() {
 		handlers.BroadcastNotesUpdated()
@@ -211,6 +238,7 @@ func setupRoutes(app *fiber.App, cfg *config.Config) *services.NoteService {
 	themeService := services.NewThemeService(themePath)
 	localeService := services.NewLocaleService(localePath)
 	graphService := services.NewGraphService(cfg.Storage.NotesDir, noteService)
+	graphService.SetLinkIndex(linkIndex)
 	exportService := services.NewExportService(cfg.Storage.NotesDir, themePath)
 
 	// Build search index asynchronously on startup (only if search is enabled)
@@ -231,20 +259,20 @@ func setupRoutes(app *fiber.App, cfg *config.Config) *services.NoteService {
 	}
 
 	// Initialize handlers
-	noteHandler := handlers.NewNoteHandlerWithTagService(noteService, tagService, cfg, searchIndex)
+	noteHandler := handlers.NewNoteHandlerWithTagService(noteService, tagService, cfg, searchIndex, shareService)
 	folderHandler := handlers.NewFolderHandlerWithCache(cfg, noteService)
 	searchHandler := handlers.NewSearchHandlerWithIndex(searchService, searchIndex, cfg)
 	tagHandler := handlers.NewTagHandler(tagService, cfg)
 	templateHandler := handlers.NewTemplateHandler(templateService, cfg)
-	shareHandler := handlers.NewShareHandler(shareService, exportService, cfg)
+	shareHandler := handlers.NewShareHandler(shareService, exportService, cfg, themePath)
 	mediaHandler := handlers.NewMediaHandler(mediaService, noteService, cfg)
 	themeHandler := handlers.NewThemeHandler(themeService, cfg)
 	localeHandler := handlers.NewLocaleHandler(localeService, cfg)
 	graphHandler := handlers.NewGraphHandler(graphService, cfg)
-	systemHandler := handlers.NewSystemHandler(cfg)
+	systemHandler := handlers.NewSystemHandler(cfg, frontendPath)
 	systemHandler.SetReadinessDeps(noteService, searchIndex)
 	authHandler := handlers.NewAuthHandler(cfg)
-	backlinkService := services.NewBacklinkService(cfg.Storage.NotesDir)
+	backlinkService := services.NewBacklinkService(cfg.Storage.NotesDir, linkIndex)
 	statisticsService := services.NewStatisticsService(cfg.Storage.NotesDir)
 	statisticsHandler := handlers.NewStatisticsHandler(statisticsService, cfg)
 
@@ -381,7 +409,7 @@ func setupRoutes(app *fiber.App, cfg *config.Config) *services.NoteService {
 	})
 
 	// Statistics
-	api.Get("/stats/*", middleware.EndpointLimiterSimple(60), statisticsHandler.GetStatistics)
+	api.Get("/statistics/*", middleware.EndpointLimiterSimple(60), statisticsHandler.GetStatistics)
 
 	// SPA fallback - serve index.html for all unmatched routes
 	app.Get("/*", middleware.EndpointLimiterSimple(120), middleware.AuthRequired(cfg.Authentication.Enabled), func(c *fiber.Ctx) error {

@@ -40,8 +40,11 @@ type NoteService struct {
 	ready          chan struct{}  // Closed when first scan completes
 	onScanComplete func()         // Callback after scan completes (for WebSocket broadcast)
 	searchIndex    *SearchIndex   // 注入：performScan 增量同步搜索索引
+	linkIndex      *LinkIndex     // 注入：performScan 后重建链接索引
 	fileMtimes     sync.Map       // path → time.Time（已知 mtime 的 snapshot），用于增量同步
 	pathMu         sync.Map       // path → *sync.Mutex（per-path 写入串行锁）
+	triggerMu      sync.Mutex
+	triggerTimer   *time.Timer
 }
 
 type scanCacheEntry struct {
@@ -52,6 +55,11 @@ type scanCacheEntry struct {
 type tagCacheEntry struct {
 	ModifiedTime time.Time
 	Tags         []string
+}
+
+type contentCacheEntry struct {
+	content string
+	mtime   time.Time
 }
 
 func NewNoteService(notesDir string) *NoteService {
@@ -101,6 +109,11 @@ func (s *NoteService) SetOnScanComplete(callback func()) {
 // 采用 setter 而非构造参数，避免与 SearchIndex 构造形成循环依赖（SearchIndex 构造也接收 NoteService）。
 func (s *NoteService) SetSearchIndex(si *SearchIndex) {
 	s.searchIndex = si
+}
+
+// SetLinkIndex 注入 LinkIndex 引用。用于在 performScan 后重建链接索引。
+func (s *NoteService) SetLinkIndex(li *LinkIndex) {
+	s.linkIndex = li
 }
 
 // ScanNotes scans all notes in the notes directory.
@@ -363,13 +376,63 @@ func (s *NoteService) GetNoteContent(notePath string) (string, error) {
 		return "", fmt.Errorf("invalid path")
 	}
 
+	// Try cache with mtime validation
+	cacheKey := cachePrefixContent + ToPosixPath(notePath)
+	if val, ok := s.cache.Get(cacheKey); ok {
+		if entry, ok := val.(*contentCacheEntry); ok {
+			fullPath := filepath.Join(s.notesDir, notePath)
+			if info, err := os.Stat(fullPath); err == nil {
+				if info.ModTime().Equal(entry.mtime) {
+					return entry.content, nil
+				}
+			}
+		}
+		s.cache.Delete(cacheKey)
+	}
+
+	// Cache miss: read from disk
 	fullPath := filepath.Join(s.notesDir, notePath)
-	content, err := os.ReadFile(fullPath)
+	data, err := os.ReadFile(fullPath)
 	if err != nil {
 		return "", err
 	}
 
-	return string(content), nil
+	content := string(data)
+
+	// Store in cache with mtime
+	info, _ := os.Stat(fullPath)
+	s.cache.Set(cacheKey, &contentCacheEntry{
+		content: content,
+		mtime:   info.ModTime(),
+	})
+
+	return content, nil
+}
+
+// GetNoteContentWithMetadata reads note content and metadata in a single disk read.
+func (s *NoteService) GetNoteContentWithMetadata(notePath string) (content string, meta *models.NoteMetadata, err error) {
+	fullPath := filepath.Join(s.notesDir, notePath)
+	if !ValidatePathSecurity(s.notesDir, notePath) {
+		return "", nil, fmt.Errorf("invalid path")
+	}
+
+	data, err := os.ReadFile(fullPath)
+	if err != nil {
+		return "", nil, err
+	}
+
+	info, _ := os.Stat(fullPath)
+	lineCount := 0
+	if len(data) > 0 {
+		lineCount = bytes.Count(data, []byte("\n")) + 1
+	}
+
+	return string(data), &models.NoteMetadata{
+		Created:  info.ModTime().UTC().Format(time.RFC3339),
+		Modified: info.ModTime().UTC().Format(time.RFC3339),
+		Size:     info.Size(),
+		Lines:    lineCount,
+	}, nil
 }
 
 // getMu returns (and lazily creates) a per-path mutex for serializing writes.
@@ -660,25 +723,12 @@ func (s *NoteService) SaveUploadedImage(notePath, filename string, data []byte) 
 }
 
 // invalidateNoteCache invalidates cache entries related to a specific note
-// This is more efficient than clearing the entire cache
+// Only does fine-grained invalidation without triggering a full background scan.
+// The background scanner's periodic tick will handle full refresh.
 func (s *NoteService) invalidateNoteCache(notePath string) {
-	// Normalize path
 	notePath = ToPosixPath(notePath)
-	
-	// Invalidate note list cache (modification time changes)
-	s.cache.DeleteByPrefix(cachePrefixNotesList)
-	
-	// Invalidate content cache for this note
 	s.cache.Delete(cachePrefixContent + notePath)
-	
-	// Invalidate tag cache for this note
 	s.tagCache.Delete(cachePrefixTags + notePath)
-	
-	// Also invalidate legacy scan cache keys for compatibility
-	s.cache.DeleteByPrefix(cachePrefixScan)
-	
-	// Trigger immediate background scan to update cache
-	s.TriggerScan()
 }
 
 func (s *NoteService) InvalidateCache() {
@@ -813,15 +863,15 @@ func (s *NoteService) StopBackgroundScanner() {
 // This is called after user operations (create/delete/move) to update cache.
 // If background scanner is not enabled, this is a no-op.
 func (s *NoteService) TriggerScan() {
-	if s.scanTrigger == nil {
-		return
+	s.triggerMu.Lock()
+	defer s.triggerMu.Unlock()
+
+	if s.triggerTimer != nil {
+		s.triggerTimer.Stop()
 	}
-	select {
-	case s.scanTrigger <- struct{}{}:
-		// Scan triggered
-	default:
-		// Scan already pending, skip
-	}
+	s.triggerTimer = time.AfterFunc(200*time.Millisecond, func() {
+		s.performScan()
+	})
 }
 
 // IsScannerReady 返回后台扫描器是否已完成首次扫描（初始就绪）。
@@ -849,6 +899,11 @@ func (s *NoteService) performScan() {
 
 	// 增量同步搜索索引：基于 markdown 笔记列表做差分
 	s.syncSearchIndex(notesOnly)
+
+	// 重建链接索引（全量，在后台 goroutine 中异步执行，避免阻塞扫描流程）
+	if s.linkIndex != nil {
+		go s.linkIndex.RebuildFull()
+	}
 
 	if s.onScanComplete != nil {
 		s.onScanComplete()

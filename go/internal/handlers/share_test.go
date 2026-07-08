@@ -26,7 +26,7 @@ func TestShareHandler_Create(t *testing.T) {
 		}
 		shareSvc := services.NewShareService(tmpDir)
 		exportSvc := services.NewExportService(tmpDir, "themes")
-		handler := NewShareHandler(shareSvc, exportSvc, cfg)
+		handler := NewShareHandler(shareSvc, exportSvc, cfg, "themes")
 
 		app := fiber.New()
 		app.Post("/api/share/*", handler.Create)
@@ -53,7 +53,7 @@ func TestShareHandler_Create(t *testing.T) {
 		}
 		shareSvc := services.NewShareService(tmpDir)
 		exportSvc := services.NewExportService(tmpDir, "themes")
-		handler := NewShareHandler(shareSvc, exportSvc, cfg)
+		handler := NewShareHandler(shareSvc, exportSvc, cfg, "themes")
 
 		app := fiber.New()
 		app.Post("/api/share/*", handler.Create)
@@ -78,7 +78,7 @@ func TestShareHandler_Create(t *testing.T) {
 		}
 		shareSvc := services.NewShareService(tmpDir)
 		exportSvc := services.NewExportService(tmpDir, "themes")
-		handler := NewShareHandler(shareSvc, exportSvc, cfg)
+		handler := NewShareHandler(shareSvc, exportSvc, cfg, "themes")
 
 		app := fiber.New()
 		app.Post("/api/share/*", handler.Create)
@@ -107,7 +107,7 @@ func TestShareHandler_GetStatus(t *testing.T) {
 		}
 		shareSvc := services.NewShareService(tmpDir)
 		exportSvc := services.NewExportService(tmpDir, "themes")
-		handler := NewShareHandler(shareSvc, exportSvc, cfg)
+		handler := NewShareHandler(shareSvc, exportSvc, cfg, "themes")
 
 		app := fiber.New()
 		app.Get("/api/share/*", handler.GetStatus)
@@ -132,7 +132,7 @@ func TestShareHandler_GetStatus(t *testing.T) {
 		}
 		shareSvc := services.NewShareService(tmpDir)
 		exportSvc := services.NewExportService(tmpDir, "themes")
-		handler := NewShareHandler(shareSvc, exportSvc, cfg)
+		handler := NewShareHandler(shareSvc, exportSvc, cfg, "themes")
 
 		// First create a token
 		_, err := shareSvc.CreateShareToken("notes/test.md", "dark")
@@ -164,7 +164,7 @@ func TestShareHandler_Revoke(t *testing.T) {
 		}
 		shareSvc := services.NewShareService(tmpDir)
 		exportSvc := services.NewExportService(tmpDir, "themes")
-		handler := NewShareHandler(shareSvc, exportSvc, cfg)
+		handler := NewShareHandler(shareSvc, exportSvc, cfg, "themes")
 
 		// First create a token
 		_, err := shareSvc.CreateShareToken("notes/test.md", "dark")
@@ -195,7 +195,7 @@ func TestShareHandler_ListSharedNotes(t *testing.T) {
 		}
 		shareSvc := services.NewShareService(tmpDir)
 		exportSvc := services.NewExportService(tmpDir, "themes")
-		handler := NewShareHandler(shareSvc, exportSvc, cfg)
+		handler := NewShareHandler(shareSvc, exportSvc, cfg, "themes")
 
 		app := fiber.New()
 		app.Get("/api/shared", handler.ListSharedNotes)
@@ -221,7 +221,7 @@ func TestShareHandler_ListSharedNotes(t *testing.T) {
 		}
 		shareSvc := services.NewShareService(tmpDir)
 		exportSvc := services.NewExportService(tmpDir, "themes")
-		handler := NewShareHandler(shareSvc, exportSvc, cfg)
+		handler := NewShareHandler(shareSvc, exportSvc, cfg, "themes")
 
 		// Create some tokens
 		shareSvc.CreateShareToken("notes/note1.md", "light")
@@ -253,7 +253,7 @@ func TestShareHandler_ViewSharedNote(t *testing.T) {
 		}
 		shareSvc := services.NewShareService(tmpDir)
 		exportSvc := services.NewExportService(tmpDir, "themes")
-		handler := NewShareHandler(shareSvc, exportSvc, cfg)
+		handler := NewShareHandler(shareSvc, exportSvc, cfg, "themes")
 
 		app := fiber.New()
 		app.Get("/share/:token", handler.ViewSharedNote)
@@ -281,7 +281,7 @@ func TestShareHandler_ViewSharedNote(t *testing.T) {
 		}
 		shareSvc := services.NewShareService(tmpDir)
 		exportSvc := services.NewExportService(tmpDir, "themes")
-		handler := NewShareHandler(shareSvc, exportSvc, cfg)
+		handler := NewShareHandler(shareSvc, exportSvc, cfg, "themes")
 
 		// Create a token
 		token, err := shareSvc.CreateShareToken("notes/test.md", "light")
@@ -318,7 +318,7 @@ func TestShareHandler_ViewSharedNote(t *testing.T) {
 
 		// Re-create service to load the malicious token
 		shareSvc := services.NewShareService(tmpDir)
-		handler := NewShareHandler(shareSvc, exportSvc, cfg)
+		handler := NewShareHandler(shareSvc, exportSvc, cfg, "themes")
 
 		app := fiber.New()
 		app.Get("/share/:token", handler.ViewSharedNote)
@@ -341,7 +341,7 @@ func TestNewShareHandler(t *testing.T) {
 	}
 	shareSvc := services.NewShareService(tmpDir)
 	exportSvc := services.NewExportService(tmpDir, "themes")
-	handler := NewShareHandler(shareSvc, exportSvc, cfg)
+	handler := NewShareHandler(shareSvc, exportSvc, cfg, "themes")
 
 	assert.NotNil(t, handler)
 	assert.Equal(t, cfg, handler.config)

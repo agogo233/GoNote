@@ -5608,20 +5608,40 @@ function noteApp() {
                         if (mediaType === 'audio') {
                             const wrapper = document.createElement('div');
                             wrapper.className = 'media-embed media-audio';
-                            wrapper.innerHTML = `<audio controls preload="none" src="${src}" title="${safeAlt}"></audio><span class="media-caption">${safeAlt}</span>`;
+                            const audioEl = document.createElement('audio');
+                            audioEl.controls = true;
+                            audioEl.preload = 'none';
+                            audioEl.src = src;
+                            audioEl.title = safeAlt || '';
+                            const captionEl = document.createElement('span');
+                            captionEl.className = 'media-caption';
+                            captionEl.textContent = safeAlt || '';
+                            wrapper.innerHTML = '';
+                            wrapper.appendChild(audioEl);
+                            wrapper.appendChild(captionEl);
                             img.replaceWith(wrapper);
                             return;
                         } else if (mediaType === 'video') {
                             const wrapper = document.createElement('div');
                             wrapper.className = 'media-embed media-video';
-                            wrapper.innerHTML = `<video controls preload="none" poster="" src="${src}" title="${safeAlt}"></video>`;
+                            const videoEl = document.createElement('video');
+                            videoEl.controls = true;
+                            videoEl.preload = 'none';
+                            videoEl.src = src;
+                            videoEl.title = safeAlt || '';
+                            wrapper.innerHTML = '';
+                            wrapper.appendChild(videoEl);
                             img.replaceWith(wrapper);
                             return;
                         } else if (mediaType === 'document') {
                             // Local PDFs: show iframe preview
                             const wrapper = document.createElement('div');
                             wrapper.className = 'media-embed media-pdf';
-                            wrapper.innerHTML = `<iframe src="${src}" title="${safeAlt}"></iframe>`;
+                            const iframeEl = document.createElement('iframe');
+                            iframeEl.src = src;
+                            iframeEl.title = safeAlt || '';
+                            wrapper.innerHTML = '';
+                            wrapper.appendChild(iframeEl);
                             img.replaceWith(wrapper);
                             return;
                         }
@@ -7196,7 +7216,6 @@ function noteApp() {
                     this.showAlert(this.t('share.error_creating', { error: error.detail || 'Unknown error' }));
 
                 }
-                this.showAlert(this.t('share.error_creating', { error: error.message }));
             } finally {
                 this.modals.share.loading = false;
             }

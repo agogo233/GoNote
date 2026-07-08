@@ -82,7 +82,7 @@ func TestGetGraphWikilink(t *testing.T) {
 	assert.Len(t, graph.Edges, 1)
 	assert.Equal(t, "note1.md", graph.Edges[0].Source)
 	assert.Equal(t, "note2.md", graph.Edges[0].Target)
-	assert.Equal(t, "link", graph.Edges[0].Type)
+	assert.Equal(t, "wikilink", graph.Edges[0].Type)
 }
 
 func TestGetGraphWikilinkWithDisplayText(t *testing.T) {
@@ -176,7 +176,8 @@ func TestExtractLinksWikilink(t *testing.T) {
 	links := svc.extractLinks(content)
 
 	assert.Len(t, links, 1)
-	assert.Equal(t, "target.md", links[0])
+	assert.Equal(t, "target.md", links[0].Path)
+	assert.Equal(t, "wikilink", links[0].Type)
 }
 
 func TestExtractLinksWikilinkWithAnchor(t *testing.T) {
@@ -189,7 +190,7 @@ func TestExtractLinksWikilinkWithAnchor(t *testing.T) {
 	links := svc.extractLinks(content)
 
 	assert.Len(t, links, 1)
-	assert.Equal(t, "target.md", links[0])
+	assert.Equal(t, "target.md", links[0].Path)
 }
 
 func TestExtractLinksMarkdownLink(t *testing.T) {
@@ -202,7 +203,8 @@ func TestExtractLinksMarkdownLink(t *testing.T) {
 	links := svc.extractLinks(content)
 
 	assert.Len(t, links, 1)
-	assert.Equal(t, "target.md", links[0])
+	assert.Equal(t, "target.md", links[0].Path)
+	assert.Equal(t, "mdlink", links[0].Type)
 }
 
 func TestExtractLinksNoMatches(t *testing.T) {

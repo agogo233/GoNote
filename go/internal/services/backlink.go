@@ -14,12 +14,17 @@ var (
 
 // BacklinkService handles backlink discovery and wikilink updates
 type BacklinkService struct {
-	notesDir string
+	notesDir  string
+	linkIndex *LinkIndex
 }
 
 // NewBacklinkService creates a new BacklinkService
-func NewBacklinkService(notesDir string) *BacklinkService {
-	return &BacklinkService{notesDir: notesDir}
+func NewBacklinkService(notesDir string, linkIndex ...*LinkIndex) *BacklinkService {
+	s := &BacklinkService{notesDir: notesDir}
+	if len(linkIndex) > 0 {
+		s.linkIndex = linkIndex[0]
+	}
+	return s
 }
 
 // BacklinkLink contains information about a single backlink occurrence
@@ -38,24 +43,62 @@ type BacklinkInfo struct {
 
 // FindBacklinks finds all notes that link to the specified note
 func (s *BacklinkService) FindBacklinks(notePath string) ([]BacklinkInfo, error) {
-	var backlinks []BacklinkInfo
-
-	// Get the note name and path variations to search for
+	notePath = ToPosixPath(notePath)
 	noteName := strings.TrimSuffix(filepath.Base(notePath), ".md")
 	notePathWithoutExt := strings.TrimSuffix(notePath, ".md")
 
-	// Walk through all notes
+	// Use index to get candidate sources (fast path)
+	if s.linkIndex != nil {
+		sourcePaths := s.linkIndex.GetBacklinkSources(notePath)
+		if len(sourcePaths) == 0 {
+			return []BacklinkInfo{}, nil
+		}
+		return s.readBacklinksFromSources(sourcePaths, notePath, noteName, notePathWithoutExt)
+	}
+
+	// Fallback: walk all files (for tests or when index is unavailable)
+	return s.walkAllForBacklinks(noteName, notePath, notePathWithoutExt)
+}
+
+func (s *BacklinkService) readBacklinksFromSources(sourcePaths []string, notePath, noteName, notePathWithoutExt string) ([]BacklinkInfo, error) {
+	var backlinks []BacklinkInfo
+
+	for _, relPath := range sourcePaths {
+		if relPath == notePath {
+			continue
+		}
+
+		fullPath := filepath.Join(s.notesDir, relPath)
+		content, err := os.ReadFile(fullPath)
+		if err != nil {
+			continue
+		}
+
+		linkTexts, links := s.extractWikilinksToNoteWithLines(string(content), noteName, notePathWithoutExt)
+		if len(links) > 0 {
+			backlinks = append(backlinks, BacklinkInfo{
+				SourcePath: relPath,
+				LinkTexts:  linkTexts,
+				Links:      links,
+			})
+		}
+	}
+
+	return backlinks, nil
+}
+
+func (s *BacklinkService) walkAllForBacklinks(noteName, notePath, notePathWithoutExt string) ([]BacklinkInfo, error) {
+	var backlinks []BacklinkInfo
+
 	err := filepath.WalkDir(s.notesDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return nil
 		}
 
-		// Skip directories and non-markdown files
 		if d.IsDir() || !strings.HasSuffix(path, ".md") {
 			return nil
 		}
 
-		// Skip the note itself
 		relPath, err := filepath.Rel(s.notesDir, path)
 		if err != nil {
 			return nil
@@ -64,13 +107,11 @@ func (s *BacklinkService) FindBacklinks(notePath string) ([]BacklinkInfo, error)
 			return nil
 		}
 
-		// Read note content
 		content, err := os.ReadFile(path)
 		if err != nil {
 			return nil
 		}
 
-		// Find wikilinks to this note with line numbers and context
 		linkTexts, links := s.extractWikilinksToNoteWithLines(string(content), noteName, notePathWithoutExt)
 		if len(links) > 0 {
 			backlinks = append(backlinks, BacklinkInfo{

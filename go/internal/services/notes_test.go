@@ -546,7 +546,7 @@ func TestBackgroundScanner(t *testing.T) {
 
 	// Trigger immediate scan
 	svc.TriggerScan()
-	time.Sleep(50 * time.Millisecond)
+	time.Sleep(300 * time.Millisecond)
 
 	// Cache should be updated
 	notes, _, err := svc.ScanNotes(false)

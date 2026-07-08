@@ -2,9 +2,11 @@ package handlers
 
 import (
 	"os"
+	"path/filepath"
 
 	"github.com/gofiber/fiber/v2"
 
+	applogger "gonote/internal/models/logger"
 	"gonote/internal/models/config"
 	"gonote/internal/models"
 	"gonote/internal/services"
@@ -12,14 +14,15 @@ import (
 
 // SystemHandler handles system-related requests
 type SystemHandler struct {
-	config      *config.Config
-	noteService *services.NoteService
-	searchIndex *services.SearchIndex
+	config       *config.Config
+	noteService  *services.NoteService
+	searchIndex  *services.SearchIndex
+	frontendPath string
 }
 
 // NewSystemHandler creates a new SystemHandler
-func NewSystemHandler(cfg *config.Config) *SystemHandler {
-	return &SystemHandler{config: cfg}
+func NewSystemHandler(cfg *config.Config, frontendPath string) *SystemHandler {
+	return &SystemHandler{config: cfg, frontendPath: frontendPath}
 }
 
 // SetReadinessDeps injects service dependencies needed for /readyz checks.
@@ -48,8 +51,9 @@ func (h *SystemHandler) ReadinessCheck(c *fiber.Ctx) error {
 		dir := h.config.Storage.NotesDir
 		f, err := os.CreateTemp(dir, ".ready-*")
 		if err != nil {
-			checks["notes_dir"] = "unwritable: " + err.Error()
+			checks["notes_dir"] = "unwritable"
 			overall = "degraded"
+			applogger.Printf("Readiness check: notes_dir unwritable: %v", err)
 		} else {
 			tmpPath := f.Name()
 			f.Close()
@@ -115,7 +119,7 @@ func (h *SystemHandler) GetConfig(c *fiber.Ctx) error {
 // ServiceWorker returns the service worker script
 func (h *SystemHandler) ServiceWorker(c *fiber.Ctx) error {
 	// Read service worker file
-	swPath := "frontend/sw.js"
+	swPath := filepath.Join(h.frontendPath, "sw.js")
 	content, err := os.ReadFile(swPath)
 	if err != nil {
 		// Return a minimal service worker

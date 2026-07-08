@@ -18,14 +18,16 @@ type ShareHandler struct {
 	shareService  *services.ShareService
 	exportService *services.ExportService
 	config        *config.Config
+	themesDir     string
 }
 
 // NewShareHandler creates a new ShareHandler
-func NewShareHandler(shareService *services.ShareService, exportService *services.ExportService, cfg *config.Config) *ShareHandler {
+func NewShareHandler(shareService *services.ShareService, exportService *services.ExportService, cfg *config.Config, themesDir string) *ShareHandler {
 	return &ShareHandler{
 		shareService:  shareService,
 		exportService: exportService,
 		config:        cfg,
+		themesDir:     themesDir,
 	}
 }
 
@@ -169,7 +171,7 @@ func (h *ShareHandler) ViewSharedNote(c *fiber.Ctx) error {
 	content = h.exportService.ProcessMediaForExport(content, noteFolder, h.config.Storage.NotesDir)
 
 	// Get theme CSS
-	ts := services.NewThemeService("themes")
+	ts := services.NewThemeService(h.themesDir)
 	themeCSS, _ := ts.GetThemeCSS(info.Theme)
 
 	// Determine if dark theme
