@@ -5928,18 +5928,30 @@ function noteApp() {
                 
                 let targetScrollTop = null;
                 
-                // Try heading-anchored sync first
-                const heading = this.findNearestHeadingInEditor(editor);
-                if (heading) {
-                    const headingEl = document.getElementById(heading.slug);
-                    if (headingEl && preview.contains(headingEl)) {
-                        const containerRect = preview.getBoundingClientRect();
-                        const headingRect = headingEl.getBoundingClientRect();
-                        targetScrollTop = preview.scrollTop + (headingRect.top - containerRect.top);
+                // Near extremes use percentage-based sync to keep both panes aligned
+                const lineHeight = parseFloat(getComputedStyle(editor).lineHeight) || 24;
+                const EXTREME_THRESHOLD = lineHeight * 3;
+                const isNearTop = editor.scrollTop < EXTREME_THRESHOLD;
+                const isNearBottom = editor.scrollTop > scrollableHeight - EXTREME_THRESHOLD;
+                
+                if (!isNearTop && !isNearBottom) {
+                    // Try heading-anchored sync in the "body" of the document
+                    const heading = this.findNearestHeadingInEditor(editor);
+                    if (heading) {
+                        const headingEl = document.getElementById(heading.slug);
+                        if (headingEl && preview.contains(headingEl)) {
+                            const paddingTop = parseFloat(getComputedStyle(editor).paddingTop) || 24;
+                            const headingEditorY = (heading.line - 1) * lineHeight + paddingTop;
+                            const offsetFromViewport = headingEditorY - editor.scrollTop;
+                            const containerRect = preview.getBoundingClientRect();
+                            const headingRect = headingEl.getBoundingClientRect();
+                            const headingPreviewY = headingRect.top - containerRect.top + preview.scrollTop;
+                            targetScrollTop = headingPreviewY - offsetFromViewport;
+                        }
                     }
                 }
                 
-                // Fallback to percentage-based sync
+                // Fallback to percentage-based sync (also used at extremes)
                 if (targetScrollTop === null) {
                     const scrollPercentage = editor.scrollTop / scrollableHeight;
                     targetScrollTop = scrollPercentage * previewScrollableHeight;
@@ -5963,15 +5975,22 @@ function noteApp() {
                 
                 let targetScrollTop = null;
                 
-                // Try heading-anchored sync first
-                const heading = this.findNearestHeadingInPreview(preview);
-                if (heading && heading.line) {
-                    const lineHeight = parseFloat(getComputedStyle(editor).lineHeight) || 24;
-                    const paddingTop = parseFloat(getComputedStyle(editor).paddingTop) || 24;
-                    targetScrollTop = (heading.line - 1) * lineHeight + paddingTop - editor.clientHeight / 3;
+                // Near extremes use percentage-based sync
+                const EXTREME_THRESHOLD = preview.clientHeight * 0.1;
+                const isNearTop = preview.scrollTop < EXTREME_THRESHOLD;
+                const isNearBottom = preview.scrollTop > scrollableHeight - EXTREME_THRESHOLD;
+                
+                if (!isNearTop && !isNearBottom) {
+                    // Try heading-anchored sync in the "body" of the document
+                    const heading = this.findNearestHeadingInPreview(preview);
+                    if (heading && heading.line) {
+                        const lineHeight = parseFloat(getComputedStyle(editor).lineHeight) || 24;
+                        const paddingTop = parseFloat(getComputedStyle(editor).paddingTop) || 24;
+                        targetScrollTop = (heading.line - 1) * lineHeight + paddingTop - editor.clientHeight / 3;
+                    }
                 }
                 
-                // Fallback to percentage-based sync
+                // Fallback to percentage-based sync (also used at extremes)
                 if (targetScrollTop === null) {
                     const scrollPercentage = preview.scrollTop / scrollableHeight;
                     targetScrollTop = scrollPercentage * editorScrollableHeight;
