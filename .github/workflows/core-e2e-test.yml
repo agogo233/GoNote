@@ -1,4 +1,4 @@
-name: E2E Tests (shard ${{ matrix.shard }}/4)
+name: E2E Tests (Core)
 
 on:
   pull_request:
@@ -9,13 +9,13 @@ on:
 
 jobs:
   test:
+    name: e2e shard ${{ matrix.shard }}/4
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
         shard: [1, 2, 3, 4]
-    
     steps:
       - uses: actions/checkout@v4
 
@@ -44,7 +44,7 @@ jobs:
           AUTHENTICATION_ENABLED: true
           AUTHENTICATION_PASSWORD: test-admin-password
         run: |
-          ./gonote --config go/config.yaml &
+          ./bin/gonote --config go/config.yaml &
           echo "SERVER_PID=$!" >> $GITHUB_ENV
 
       - name: Wait for server
@@ -65,8 +65,8 @@ jobs:
 
       - name: Upload Results
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: core-test-results-${{ matrix.shard }}
-          path: test-results/
+          path: playwright-report/
           retention-days: 3

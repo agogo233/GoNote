@@ -1,52 +1,51 @@
-# 📋 Note Templates
+# 📋 笔记模板
 
-Create notes from reusable templates with dynamic placeholder replacement.
+使用可重用模板创建笔记，支持动态占位符自动替换。
 
-## Overview
+---
 
-Templates allow you to quickly create notes with predefined structures and content. Perfect for recurring note types like meeting notes, daily journals, project plans, and more.
+## 🎯 概述
 
-## How to Use Templates
+模板允许您快速创建具有预定义结构和内容的笔记。非常适合重复性笔记类型，如：
 
-### 1. Create Template Files
+- 📅 会议笔记
+- 📖 每日日志
+- 📊 项目计划
+- 🔬 实验记录
+- ✍️ 周报/月报
 
-Templates are stored in the `data/_templates/` folder as markdown files. You will need to create such folder if it doesn't exist:
+---
+
+## 🚀 如何使用模板
+
+### 1️⃣ 准备模板文件
+
+模板存储在 `data/_templates/` 文件夹中，为 Markdown 文件。
+
+**如果文件夹不存在，请先创建：**
+
+```bash
+# 项目根目录下
+mkdir -p data/_templates
+```
+
+**推荐目录结构：**
 
 ```
 data/
-└── _templates/
-    ├── meeting-notes.md
-    ├── daily-journal.md
-    └── project-plan.md
+├── _templates/
+│   ├── meeting-notes.md
+│   ├── daily-journal.md
+│   ├── project-plan.md
+│   └── ...
+└── notes/
 ```
 
-### 2. Access Templates
+---
 
-Click the **"New"** button (or **+** on any folder) and select **"New from Template"**:
+### 2️⃣ 创建模板
 
-1. Choose a template from the dropdown
-2. Enter a name for your new note
-3. Click "Create Note"
-
-The template will be copied with all placeholders replaced automatically!
-
-### 3. Use Placeholders
-
-Templates support dynamic placeholders that are replaced when you create a note:
-
-| Placeholder | Description | Example |
-|------------|-------------|---------|
-| `{{date}}` | Current date | `2025-11-26` |
-| `{{time}}` | Current time | `14:30:45` |
-| `{{datetime}}` | Current date and time | `2025-11-26 14:30:45` |
-| `{{timestamp}}` | Unix timestamp | `1732632645` |
-| `{{year}}` | Current year | `2025` |
-| `{{month}}` | Current month | `11` |
-| `{{day}}` | Current day | `26` |
-| `{{title}}` | Note name (without .md) | `Weekly Meeting` |
-| `{{folder}}` | Parent folder name | `Projects` |
-
-### Example Template
+在 `data/_templates/` 中创建 `.md` 文件，使用占位符：
 
 ```markdown
 ---
@@ -54,85 +53,218 @@ tags: [meeting]
 date: {{date}}
 ---
 
-# Meeting Notes - {{title}}
+# {{title}}
 
-**Date:** {{datetime}}  
-**Participants:** 
+**时间：** {{datetime}}  
+**地点：**  
+**参会人：**
+
+## 议程
+
 - 
 
-## Agenda
-- 
+## 讨论内容
 
-## Discussion
+## 待办事项
+- [ ]
 
-
-## Action Items
-- [ ] 
-
-## Next Steps
-
-
+## 下一步
 ```
 
-When you create a note called "Team Sync" from this template, it becomes:
+---
+
+### 3️⃣ 使用模板创建笔记
+
+**步骤：**
+
+1. 点击**"新建"**按钮（或任意文件夹旁的 **+** 图标）
+2. 在下拉菜单中选择 **"从模板新建"**
+3. 从列表中选择模板
+4. 输入新笔记的名称
+5. 点击 **"创建"**
+
+所有 `{{占位符}}` 会自动替换为当前值！
+
+---
+
+## 🔄 可用占位符 / Placeholders
+
+| 占位符 | 替换为 | 示例 |
+|--------|--------|------|
+| `{{date}}` | 当前日期（YYYY-MM-DD） | `2025-01-15` |
+| `{{time}}` | 当前时间（HH:MM:SS） | `14:30:45` |
+| `{{datetime}}` | 完整日期时间 | `2025-01-15 14:30:45` |
+| `{{timestamp}}` | Unix 时间戳（秒） | `1736958600` |
+| `{{year}}` | 当前年份（YYYY） | `2025` |
+| `{{month}}` | 当前月份（MM） | `01` |
+| `{{day}}` | 当前日期（DD） | `15` |
+| `{{title}}` | 笔记名称（不含扩展名） | `weekly-meeting` |
+| `{{folder}}` | 父文件夹名称 | `Meetings` |
+
+---
+
+## 📦 内置模板示例
+
+项目在 `project-docs/templates/` 中提供三个示例模板，可直接复制使用：
+
+### 1. meeting-notes.md — 会议笔记
 
 ```markdown
 ---
 tags: [meeting]
-date: 2025-11-26
+date: {{date}}
 ---
 
-# Meeting Notes - Team Sync
+# 会议笔记 - {{title}}
 
-**Date:** 2025-11-26 14:30:45  
-**Participants:** 
+**时间：** {{datetime}}  
+**参会人：**
+
+## 议程
+
 - 
 
-## Agenda
-- 
+## 讨论内容
 
-## Discussion
+## 待办事项
+- [ ]
 
-
-## Action Items
-- [ ] 
-
-## Next Steps
-
-
+## 下一步
 ```
 
-## Example Templates
+---
 
-We provide three example templates in `project-docs/templates/` that you can copy to your `data/_templates/` folder:
+### 2. daily-journal.md — 每日日志
 
-1. **meeting-notes.md** - Structured meeting notes with agenda, discussion, and action items
-2. **daily-journal.md** - Daily journal with morning goals and evening reflection
-3. **project-plan.md** - Project planning template with objectives, timeline, and status tracking
+```markdown
+---
+tags: [journal, daily]
+date: {{date}}
+---
 
-### Using Example Templates
+# 日记 - {{date}}
 
-**Option 1: Copy Manually**
+## 🎯 今日目标
+
+- 
+
+## ✅ 今日完成
+
+- 
+
+## 📝 反思
+
+- 今天学到了什么？
+- 遇到了什么困难？
+- 明天如何改进？
+
+## 🎲 感恩记录
+
+- 
+```
+
+---
+
+### 3. project-plan.md — 项目规划
+
+```markdown
+---
+tags: [project, planning]
+date: {{date}}
+---
+
+# 项目计划 - {{title}}
+
+## 项目目标
+
+- 
+
+## 时间线
+
+- **开始：** {{date}}
+- **截止：** 
+
+## 关键里程碑
+
+- 
+
+## 所需资源
+
+- 
+
+## 风险评估
+
+- 
+
+## 成功指标
+
+- 
+```
+
+---
+
+## 💡 使用提示
+
+### ✅ 最佳实践
+
+- 模板可以包含 YAML frontmatter 元数据（如 tags、日期）
+- 使用描述性模板名称（会显示在下拉菜单中）
+- 模板可在任意文件夹中使用，上下文保留
+- 可以随时编辑模板，更改仅影响**新创建**的笔记
+- 将模板与标签功能结合，实现强大组织
+
+### 🔧 自定义示例
+
+**添加自动标签：**
+
+```markdown
+---
+tags: [meeting, {{year}}]
+date: {{date}}
+---
+```
+
+创建 2025 年的会议笔记时，自动获得标签 `meeting` 和 `2025`。
+
+**包含项目名称：**
+
+```markdown
+---
+tags: [project]
+project: "{{title}}"
+date: {{date}}
+---
+
+# {{title}} - 项目笔记
+
+**项目开始日期：** {{datetime}}
+```
+
+---
+
+## 📤 如何安装示例模板
+
+**方式 1：手动复制**
+
 ```bash
+# 从项目根目录复制
 cp project-docs/templates/*.md data/_templates/
 ```
 
-**Option 2: Create Your Own**
-1. Create a `.md` file in `data/_templates/`
-2. Add content and placeholders
-3. Save and it's ready to use!
+**方式 2：创建您自己的**
 
-## Tips
-
-- ✅ Templates can include YAML frontmatter for tags and metadata
-- ✅ Use descriptive template names (they appear in the dropdown)
-- ✅ Templates work in any folder - the context is preserved
-- ✅ You can edit templates anytime - changes apply to new notes only
-- ✅ Combine templates with tags for powerful organization
+1. 在 `data/_templates/` 中创建新的 `.md` 文件
+2. 设计您需要的结构和内容
+3. 添加占位符
+4. 保存即可立即使用！
 
 ---
 
-**See also:**
-- [Tags Documentation](TAGS.md) - Learn about organizing with tags
-- [Features Overview](FEATURES.md) - All application features
+## 🔗 相关功能
 
+- **标签系统** — [TAGS_CN.md](TAGS_CN.md) 了解如何使用标签组织笔记
+- **功能概览** — [FEATURES_CN.md](FEATURES_CN.md) 查看所有功能特性
+
+---
+
+**让模板提升您的工作效率！** 🚀

@@ -1,10 +1,10 @@
-# 🐳 Docker 部署指南 / Docker Deployment Guide
+# 🐳 Docker 部署指南
 
 本文档详细介绍 GoNote 的 Docker 部署配置、路径映射和常见问题解决方案。
 
 ---
 
-## 📋 目录 / Table of Contents
+## 📋 目录
 
 1. [快速开始](#快速开始)
 2. [Docker Compose 配置](#docker-compose-配置)
@@ -15,7 +15,7 @@
 
 ---
 
-## 快速开始 / Quick Start
+## 快速开始
 
 ### 使用 Docker Run（最简单）
 
@@ -37,9 +37,11 @@ docker run -d --name gonote -p 9000:9000 `
 
 访问 http://localhost:9000
 
+> 💡 **提示**：您的笔记保存在宿主机的 `./data/` 目录，重启容器后数据不会丢失。
+
 ---
 
-## Docker Compose 配置 / Docker Compose Configuration
+## Docker Compose 配置
 
 ### 可用配置文件
 
@@ -114,7 +116,7 @@ docker-compose -f docker/compose/development.yml logs -f
 
 ---
 
-## 路径映射说明 / Volume Mapping
+## 路径映射说明
 
 ### 核心概念
 
@@ -167,7 +169,7 @@ services:
 
 ---
 
-## 数据持久化 / Data Persistence
+## 数据持久化
 
 ### 为什么需要数据持久化？
 
@@ -214,18 +216,17 @@ data/
 
 ---
 
-## 常见问题 / Common Issues
+## 常见问题
 
 ### 问题 1：为什么我的笔记数据不见了？
 
 **现象**：启动容器后，发现 `./data/notes/` 目录为空。
 
-**可能原因和解决方案**：
-
 #### 原因 1：容器未运行
 
 数据是在容器运行时写入的，容器未运行自然没有数据。
 
+**解决方案：**
 ```bash
 # 检查容器状态
 docker ps | grep gonote
@@ -276,10 +277,6 @@ docker volume ls | grep gonote
 
 # 查看卷的详细信息
 docker inspect gonote | grep -A 20 Mounts
-
-# 如果使用了匿名卷，需要迁移数据
-docker run --rm -v gonote_data:/source -v $(pwd)/data:/target alpine \
-  cp -r /source /target
 ```
 
 ### 问题 2：如何验证挂载是否生效？
@@ -354,7 +351,7 @@ find $BACKUP_DIR -name "gonote-*.tar.gz" -mtime +7 -delete
 
 ---
 
-## 调试技巧 / Debugging Tips
+## 调试技巧
 
 ### 1. 查看容器日志
 
@@ -445,7 +442,7 @@ docker inspect --format='{{json .State.Health}}' gonote | jq
 
 ---
 
-## 环境变量配置 / Environment Variables
+## 环境变量配置
 
 在 Docker Compose 中配置环境变量：
 
@@ -468,11 +465,11 @@ services:
       - RATE_LIMIT_ENABLED=true
 ```
 
-完整的环境变量参考：[ENVIRONMENT_VARIABLES.md](./ENVIRONMENT_VARIABLES.md)
+完整的环境变量参考：[ENVIRONMENT_VARIABLES_CN.md](./ENVIRONMENT_VARIABLES_CN.md)
 
 ---
 
-## 安全建议 / Security Recommendations
+## 安全建议
 
 1. **修改默认密码**：不要使用默认的 `admin` 密码
 2. **生成随机密钥**：使用 `openssl rand -hex 32` 生成 `AUTHENTICATION_SECRET_KEY`
@@ -481,15 +478,15 @@ services:
 5. **限制 CORS**：不要使用 `allowed_origins: ["*"]`
 6. **定期备份**：定期备份 `./data/` 目录
 
-详细安全指南：[SECURITY.md](../security/SECURITY.md)
+详细安全指南：[SECURITY_CN.md](../security/SECURITY_CN.md)
 
 ---
 
-## 相关文档 / Related Documentation
+## 相关文档
 
-- [ENVIRONMENT_VARIABLES.md](./ENVIRONMENT_VARIABLES.md) - 环境变量完整参考
+- [ENVIRONMENT_VARIABLES_CN.md](./ENVIRONMENT_VARIABLES_CN.md) - 环境变量完整参考
 - [DEPLOY_CN.md](./DEPLOY_CN.md) - 部署配置总览
-- [SECURITY.md](../security/SECURITY.md) - 安全最佳实践
+- [SECURITY_CN.md](../security/SECURITY_CN.md) - 安全最佳实践
 - [README.md](../../README.md) - 项目快速入门
 
 ---

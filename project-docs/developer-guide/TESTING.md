@@ -1,269 +1,353 @@
-# GoNote Tests
+# 🧪 测试指南
 
-This directory contains all test suites for GoNote.
+本文档介绍 GoNote 项目的测试体系，包括 Playwright E2E 测试和 Go 单元测试。
 
-## Directory Structure
+---
+
+## 📂 测试结构
 
 ```
 tests/
-├── e2e/                    # Playwright E2E tests
-│   ├── auth/               # Authentication tests
-│   ├── bugs/               # Bug regression tests
-│   ├── encoding-fix/       # Encoding tests
-│   ├── export/             # Export functionality tests
-│   ├── fixtures/           # Test fixtures and data
-│   ├── folders/            # Folder navigation tests
-│   ├── graph/              # Graph view tests
-│   ├── i18n/               # Internationalization tests
-│   ├── media/              # Media embedding tests
-│   ├── mobile/             # Mobile responsiveness tests
-│   ├── notes/              # Note CRUD tests
-│   ├── outline/            # Outline/navigation tests
-│   ├── search/             # Search functionality tests
-│   ├── security/           # Security tests
-│   ├── share/              # Sharing functionality tests
-│   ├── shortcuts/          # Keyboard shortcut tests
-│   ├── statistics/         # Statistics tests
-│   ├── tags/               # Tag functionality tests
-│   ├── templates/          # Template tests
-│   ├── themes/             # Theme tests
-│   ├── view-modes/         # View mode tests
-│   └── homepage-fix.spec.ts # Homepage tests
-└── README.md               # This file
+└── e2e/                          # Playwright E2E 测试
+    ├── auth/                     # 认证相关测试
+    ├── bugs/                     # Bug 回归测试
+    ├── encoding-fix/             # 字符编码测试
+    ├── export/                   # 导出功能测试
+    ├── folders/                  # 文件夹操作测试
+    ├── graph/                    # 知识图谱测试
+    ├── i18n/                     # 国际化测试
+    ├── media/                    # 媒体文件测试
+    ├── mobile/                   # 移动端响应式测试
+    ├── notes/                    # 笔记 CRUD 测试
+    ├── outline/                  # 大纲导航测试
+    ├── search/                   # 搜索功能测试
+    ├── security/                 # 安全测试
+    ├── share/                    # 分享功能测试
+    ├── shortcuts/                # 键盘快捷键测试
+    ├── statistics/               # 统计功能测试
+    ├── tags/                     # 标签功能测试
+    ├── templates/                # 模板功能测试
+    ├── themes/                   # 主题测试
+    ├── view-modes/               # 视图模式测试
+    └── homepage-fix.spec.ts      # 首页测试
+
+go/internal/**/*_test.go          # Go 单元测试（与源码同目录）
 ```
 
-## Test Types
+---
 
-### E2E Tests (Playwright)
+## 🔬 测试类型
 
-Located in `e2e/`, these tests verify the complete application flow:
+### E2E 测试（Playwright）
 
-- **Browser automation** using Playwright
-- **Full-stack testing** including frontend and backend
-- **Real user scenarios** and workflows
-- **Cross-browser testing** (Chromium, Firefox, WebKit)
+- **浏览器自动化** — 使用 Playwright 控制真实浏览器
+- **全栈测试** — 覆盖前端 UI 和 API 层
+- **真实用户场景** — 模拟实际使用流程
+- **跨浏览器** — 支持 Chromium、Firefox、WebKit
 
-### Unit Tests (Go)
+### Go 单元测试
 
-Located alongside Go source code in `go/internal/**/*_test.go`:
+位于 `go/internal/**/*_test.go`：
 
-- **Handler tests** - HTTP request/response
-- **Service tests** - Business logic
-- **Model tests** - Data structures
-- **Utility tests** - Helper functions
+- **Handler 测试** — HTTP 请求/响应验证
+- **Service 测试** — 业务逻辑单元测试
+- **Model 测试** — 数据结构和模型验证
+- **Utility 测试** — 辅助函数测试
 
-## Running Tests
+---
 
-### E2E Tests
+## 🚀 运行测试
+
+### 环境准备
+
+**必要条件：**
+
+- Node.js 18+
+- Playwright 浏览器
+- Go 1.24+
+- GoNote 服务器运行（E2E 测试需要）
+
+**首次安装 Playwright 浏览器：**
 
 ```bash
-# Install Playwright browsers
 npx playwright install
 
-# Run all E2E tests
-npx playwright test
-
-# Run with UI
-npx playwright test --ui
-
-# Run specific test file
-npx playwright test tests/e2e/notes/create-note.spec.ts
-
-# Run tests by tag
-npx playwright test --grep @smoke
-
-# Run with specific browser
-npx playwright test --project=chromium
+# 安装所有浏览器（可选）
+npx playwright install --all
 ```
 
-### Go Unit Tests
+---
+
+### 运行 E2E 测试
 
 ```bash
-# Run all Go tests
-cd go && go test ./...
+# 运行所有 E2E 测试（推荐先用此命令）
+make test-e2e
 
-# Run with race detector
-cd go && go test ./... -race
-
-# Run with coverage
-cd go && go test ./... -cover
-
-# Run specific package tests
-cd go && go test ./internal/handlers/...
-
-# Run benchmarks
-cd go && go test -bench=. ./...
+# 或手动运行
+npx playwright test
 ```
 
-## Test Configuration
+**常用选项：**
 
-### Playwright Config
+```bash
+# UI 模式（交互式调试）
+npx playwright test --ui
 
-See `playwright.config.ts` in the project root for:
+# 运行特定测试文件
+npx playwright test tests/e2e/notes/create-note.spec.ts
 
-- Browser configurations
-- Test timeouts
-- Reporter settings
-- Parallel execution options
+# 运行特定标签的测试
+npx playwright test --grep @smoke
 
-### Go Test Config
+# 运行特定浏览器
+npx playwright test --project=chromium
 
-Go tests use standard Go testing package with no additional configuration.
+# 查看 HTML 测试报告
+npx playwright test --reporter=html
+npx playwright show-report
+```
 
-## Writing Tests
+---
 
-### E2E Test Example
+### 运行 Go 单元测试
+
+```bash
+# 运行所有测试（推荐）
+make test
+
+# 手动运行（注意 STORAGE_NOTES_DIR 环境变量）
+cd go
+STORAGE_NOTES_DIR=../data go test ./...
+
+# 竞争检测
+go test ./... -race
+
+# 生成覆盖率报告
+go test ./... -coverprofile=coverage.out
+go tool cover -html=coverage.out
+
+# 运行特定包
+go test ./internal/handlers/... -v
+
+# 运行基准测试
+go test -bench=. ./...
+```
+
+**注意：** Makefile 会自动设置 `STORAGE_NOTES_DIR=../data`，确保测试数据写入项目根目录的 `data/` 目录。
+
+---
+
+## 📝 编写测试
+
+### E2E 测试示例（Playwright）
 
 ```typescript
 import { test, expect } from '@playwright/test';
 
 test('should create a new note', async ({ page }) => {
   await page.goto('http://localhost:9000');
-  
-  // Click new note button
+
+  // 点击新建笔记按钮
   await page.click('[data-testid="new-note-btn"]');
-  
-  // Enter title
+
+  // 输入标题
   await page.fill('#note-title', 'Test Note');
-  
-  // Verify note was created
+
+  // 验证笔记已创建
   await expect(page.locator('.note-title')).toHaveText('Test Note');
 });
 ```
 
-### Go Test Example
+**最佳实践：**
+
+- 使用 `[data-testid]` 属性作为选择器（更稳定）
+- 每个测试独立且可重复
+- 测试前清理状态（夹具全局清理）
+- 使用 `page` fixture 确保浏览器上下文隔离
+
+---
+
+### Go 测试示例
 
 ```go
 func TestNoteHandler_GetNote(t *testing.T) {
-    handler := NewNoteHandler(service)
-    
+    // 准备：创建 service 和 handler
+    service := services.NewNoteService(notesDir)
+    handler := handlers.NewNoteHandler(service, cfg)
+
+    // 创建模拟请求
     req := httptest.NewRequest("GET", "/notes/test.md", nil)
     w := httptest.NewRecorder()
-    
+
+    // 执行：调用处理器
     handler.GetNote(w, req)
-    
+
+    // 验证：检查状态码
     if w.Code != http.StatusOK {
-        t.Errorf("expected status 200, got %d", w.Code)
+        t.Fatalf("expected status 200, got %d", w.Code)
+    }
+
+    // 验证：解析响应
+    var resp map[string]interface{}
+    json.Unmarshal(w.Body.Bytes(), &resp)
+    if !resp["success"].(bool) {
+        t.Error("expected success=true")
     }
 }
 ```
 
-## Test Coverage
+**最佳实践：**
 
-### E2E Coverage
+- 使用表驱动测试（table-driven tests）
+- 模拟依赖（通过 interface）
+- 测试边界条件和错误情况
+- 保持测试独立（无共享状态）
 
-| Feature | Coverage |
-|---------|----------|
-| Authentication | ✅ |
-| Note CRUD | ✅ |
-| Search | ✅ |
-| Tags | ✅ |
-| Templates | ✅ |
-| Graph View | ✅ |
-| Sharing | ✅ |
-| Themes | ✅ |
-| Mobile | ✅ |
-| Security | ✅ |
+---
 
-### Go Coverage
+## 📊 测试覆盖率
 
-Run to see detailed coverage:
+### E2E 测试覆盖范围
+
+| 功能模块 | 覆盖率 |
+|---------|--------|
+| 认证 | ✅ |
+| 笔记 CRUD | ✅ |
+| 搜索 | ✅ |
+| 标签 | ✅ |
+| 模板 | ✅ |
+| 图谱视图 | ✅ |
+| 分享 | ✅ |
+| 主题 | ✅ |
+| 移动端 | ✅ |
+| 安全 | ✅ |
+
+---
+
+### Go 代码覆盖率
 
 ```bash
-cd go && go test ./... -coverprofile=coverage.out
+# 生成覆盖率报告
+cd go
+go test ./... -coverprofile=coverage.out
+
+# 查看 HTML 报告
 go tool cover -html=coverage.out
 ```
 
-## Continuous Integration
+---
 
-Tests run automatically on:
+## 🔄 持续集成
 
-- Every push to main branch
-- Every pull request
-- Every release tag
+CI 配置位于 `.github/workflows/`：
 
-See `.github/workflows/` for CI configuration.
+- **每 push 到 main 分支** — 运行所有测试
+- **每 PR** — 运行测试、linter、构建检查
+- **每 release tag** — 运行所有检查 + 发布 Docker 镜像
 
-## Fixtures
-
-Test fixtures are stored in `e2e/fixtures/`:
-
-- Sample notes
-- Test images
-- Configuration files
-- Mock data
-
-## Reporting
-
-### Playwright Reports
+### 本地模拟 CI
 
 ```bash
-# Generate HTML report
-npx playwright test --reporter=html
+# 安装依赖
+make deps
 
-# View report
-npx playwright show-report
+# 运行所有测试（像 CI 一样）
+make test              # Go 单元测试
+cd .. && npx playwright test  # E2E 测试
+cd go && go vet ./...  # 静态检查
 ```
 
-### Go Reports
+---
+
+## 🧩 测试夹具（Fixtures）
+
+测试数据位于 `tests/e2e/fixtures/`：
+
+- **笔记样本** — 预创建的测试笔记（各种格式）
+- **测试图片** — 用于媒体上传测试
+- **配置** — 测试专用 `config.yaml`
+- **模拟数据** — 特定场景数据
+
+**全局清理：** `globalTeardown.ts` 负责所有测试完成后清理测试数据。
+
+---
+
+## 🐛 调试测试
+
+### E2E 测试调试
 
 ```bash
-# Generate coverage report
-cd go && go test ./... -coverprofile=coverage.out
-
-# View in browser
-go tool cover -html=coverage.out
-```
-
-## Troubleshooting
-
-### Flaky Tests
-
-If a test is flaky:
-
-1. Check for timing issues (add proper waits)
-2. Ensure test isolation (clean state)
-3. Check for external dependencies
-4. Add retry logic if appropriate
-
-### Debugging E2E Tests
-
-```bash
-# Run with slow motion
+# 启用慢动作播放
 npx playwright test --debug
 
-# Run specific test with logs
+# 运行特定测试并显示日志
 npx playwright test tests/e2e/notes/test.spec.ts --debug
 
-# Use Playwright Inspector
+# 使用 Playwright Inspector
 PWDEBUG=1 npx playwright test
+
+# 失败时自动截图（在 playwright.config.ts 中配置）
 ```
 
-### Debugging Go Tests
+---
+
+### Go 测试调试
 
 ```bash
-# Run with verbose output
+# 详细输出
 go test -v ./...
 
-# Run specific test
-go test -v -run TestName ./...
+# 运行单个测试
+go test -v -run TestNoteHandler_Get ./...
 
-# Use delve debugger
+# 使用 Delve 调试器
 dlv test ./internal/handlers
 ```
 
-## Best Practices
+---
 
-1. **Test isolation** - Each test should be independent
-2. **Descriptive names** - Test names should describe the behavior
-3. **Arrange-Act-Assert** - Follow AAA pattern
-4. **Clean up** - Remove test data after tests
-5. **Meaningful assertions** - Test actual behavior, not implementation
-6. **Page objects** - Use page object pattern for E2E tests
-7. **Test data** - Use fixtures for consistent test data
+## ✅ 最佳实践
 
-## Related Documentation
+### 通用原则
 
-- [Contributing Guidelines](../../CONTRIBUTING.md)
-- [Security Tests](../../tests/e2e/security/)
-- [API Documentation](./API.md)
+1. **测试隔离** — 每个测试独立运行，不依赖其他测试状态
+2. **描述性名称** — 如 `TestCreateNote_InvalidPath_ReturnsError`
+3. **Arrange-Act-Assert** — 遵循 AAA 模式组织代码
+4. **清理数据** — 测试后删除创建的笔记/文件
+5. **有意义的断言** — 测试行为而非实现细节
+6. **Page Object 模式** — E2E 使用页面对象封装 UI 交互
+7. **测试数据固定** — 使用 fixtures 保证一致性
+
+---
+
+### 测试稳定性
+
+**避免 Flaky Tests（随机失败）：**
+
+- 使用 `await expect(...).toBeVisible()` 而非硬编码等待
+- 确保测试间无状态残留
+- 使用 `--retries`（CI）或 `test.describe.configure({ mode: 'serial' })`
+
+**处理异步操作：**
+
+- Playwright 自动等待元素，必要时 `await page.waitForLoadState()`
+- Go 中使用 `t.Parallel()` 并行化独立测试
+
+---
+
+## 📚 相关文档
+
+- [贡献指南](../../CONTRIBUTING.md）— PR 要求和测试准则
+- [API 文档](../developer-guide/API_CN.md）— 被测试的端点
+- [安全专项](../../security/）— 安全测试说明
+
+---
+
+**💡 提交前检查：**
+
+1. ✅ 新功能包含相应的 E2E 或单元测试
+2. ✅ 所有测试通过（`make test && npx playwright test`）
+3. ✅ Bug 修复包含回归测试防止问题重现
+
+Happy testing! 🎉

@@ -35,14 +35,24 @@ jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      AUTHENTICATION_ENABLED: true
+      AUTHENTICATION_PASSWORD: test-admin-password
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
 
       - name: Install Playwright
         run: |
@@ -59,40 +69,25 @@ jobs:
           timeout 60 bash -c 'until curl -s http://localhost:9000 > /dev/null; do sleep 1; done' || echo "Server may not be ready"
 
       - name: Run E2E Tests
-        env:
-          AUTHENTICATION_ENABLED: true
-          AUTHENTICATION_PASSWORD: test-admin-password
         run: |
-          # Determine test pattern based on input
-          if [ "${{ github.event.inputs.test_type }}" = "core" ]; then
-            npx playwright test auth/ notes/crud.spec.ts search/search.spec.ts
-          elif [ "${{ github.event.inputs.test_type }}" = "auth" ]; then
-            npx playwright test auth/
-          elif [ "${{ github.event.inputs.test_type }}" = "notes" ]; then
-            npx playwright test notes/
-          elif [ "${{ github.event.inputs.test_type }}" = "search" ]; then
-            npx playwright test search/
-          elif [ "${{ github.event.inputs.test_type }}" = "tags" ]; then
-            npx playwright test tags/
-          elif [ "${{ github.event.inputs.test_type }}" = "folders" ]; then
-            npx playwright test folders/
-          elif [ "${{ github.event.inputs.test_type }}" = "export" ]; then
-            npx playwright test export/
-          elif [ "${{ github.event.inputs.test_type }}" = "media" ]; then
-            npx playwright test media/
-          elif [ "${{ github.event.inputs.test_type }}" = "mobile" ]; then
-            npx playwright test mobile/
-          elif [ "${{ github.event.inputs.test_type }}" = "themes" ]; then
-            npx playwright test themes/
-          elif [ "${{ github.event.inputs.test_type }}" = "security" ]; then
-            npx playwright test security/
-          elif [ "${{ github.event.inputs.test_type }}" = "bugs" ]; then
-            npx playwright test bugs/ encoding-fix/
-          elif [ "${{ github.event.inputs.test_type }}" = "all" ]; then
-            npx playwright test
-          fi
+          case "${{ github.event.inputs.test_type }}" in
+            core)     npx playwright test auth/ notes/crud.spec.ts search/search.spec.ts ;;
+            auth)     npx playwright test auth/ ;;
+            notes)    npx playwright test notes/ ;;
+            search)   npx playwright test search/ ;;
+            tags)     npx playwright test tags/ ;;
+            folders)  npx playwright test folders/ ;;
+            export)   npx playwright test export/ ;;
+            media)    npx playwright test media/ ;;
+            mobile)   npx playwright test mobile/ ;;
+            themes)   npx playwright test themes/ ;;
+            security) npx playwright test security/ ;;
+            bugs)     npx playwright test bugs/ encoding-fix/ ;;
+            all)      npx playwright test ;;
+          esac
 
       - name: Stop server
+        if: always()
         run: |
           if [ -n "$SERVER_PID" ]; then
             kill $SERVER_PID 2>/dev/null || true
@@ -100,8 +95,8 @@ jobs:
 
       - name: Upload Test Results
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: playwright-report
-          path: test-results/
+          path: playwright-report/
           retention-days: 7

@@ -1,256 +1,325 @@
-# ✨ Features
+# ✨ GoNote 功能概览
 
-## 📝 Note Management
+## 📝 笔记管理 / Note Management
 
-### Create & Edit
-- **Rich markdown editor** with live preview
-- **Three view modes**: Edit, Split, Preview
-- **Auto-save** - Never lose your work
-- **Undo/Redo** - Ctrl+Z / Ctrl+Y support
-- **Note templates** - Create notes from templates with dynamic placeholders
-- **Syntax highlighting** for code blocks (50+ languages)
-- **Copy code blocks** - One-click copy button on hover
-- **LaTeX/Math rendering** - Beautiful mathematical equations with MathJax (see [MATHJAX.md](MATHJAX.md))
-- **Mermaid diagrams** - Create flowcharts, sequence diagrams, and more (see [MERMAID.md](MERMAID.md))
-- **HTML Export** - Export notes as standalone HTML files with embedded images
-- **Public Sharing** - Share notes via token-based URLs with optional QR code for mobile (see [SHARING.md](SHARING.md))
+### 创建与编辑 / Create & Edit
 
-### Media Support
-- **Drag & drop upload** - Drop files from your file system directly into the editor
-- **Clipboard paste** - Paste images from clipboard with Ctrl+V
-- **Images** - JPG, PNG, GIF, WebP (max 10MB)
-- **Audio** - MP3, WAV, OGG, M4A (max 50MB)
-- **Video** - MP4, WebM, MOV, AVI (max 100MB)
-- **Documents** - PDF (max 20MB)
-- **In-app viewing** - View all media types directly in the sidebar
-- **Inline preview** - Audio/video players and PDF viewer embedded in notes
+- **富文本 Markdown 编辑器**，支持实时预览
+- **三种视图模式**：编辑模式、分栏模式、预览模式
+- **自动保存** — 永远不丢失工作内容
+- **撤销/重做** — 支持 Ctrl+Z / Ctrl+Y 快捷键
+- **笔记模板** — 从带动态占位符的模板快速创建笔记
+- **代码语法高亮** — 支持 50+ 种编程语言
+- **一键复制代码块** — 悬停时显示复制按钮
+- **LaTeX 数学公式渲染** — 使用 MathJax 渲染精美数学公式（详见 [MATHJAX_CN.md](MATHJAX_CN.md)）
+- **Mermaid 图表支持** — 创建流程图、时序图等（详见 [MERMAID_CN.md](MERMAID_CN.md)）
+- **HTML 导出** — 将笔记导出为带嵌入图片的独立 HTML 文件
+- **公开分享** — 通过令牌 URL 分享笔记，支持 QR 码方便移动端访问（详见 [SHARING_CN.md](SHARING_CN.md)）
 
-### Organization
-- **Folder hierarchy** - Organize notes in nested folders
-- **Drag & drop** - Move notes and folders effortlessly
-- **Alphabetical sorting** - Find notes quickly
-- **Rename anything** - Files and folders, instantly
-- **Visual tree view** - Expandable/collapsible navigation
-- **Hide system folders** - Toggle to hide `_attachments`, `_templates` and other underscore-prefixed folders from sidebar
+---
 
-## 🔗 Linking & Discovery
+### 媒体支持 / Media Support
 
-### Graph View
-- **Interactive graph** - Visualize all your notes and their connections
-- **Navigate with mouse** - Drag to pan, scroll to zoom, double-click nodes to open notes
-- **Multiple link types** - See wikilinks and markdown links distinguished by color
-- **Theme-aware** - Graph colors adapt to your current theme
+- **拖拽上传** — 直接从文件系统拖放文件到编辑器
+- **剪贴板粘贴** — 使用 Ctrl+V 粘贴剪贴板中的图片
+- **图片格式** — JPG、PNG、GIF、WebP（最大 10 MB）
+- **音频格式** — MP3、WAV、OGG、M4A（最大 50 MB）
+- **视频格式** — MP4、WebM、MOV、AVI（最大 100 MB）
+- **文档格式** — PDF（最大 20 MB）
+- **应用内查看** — 直接在侧边栏预览所有媒体类型
+- **内联预览** — 笔记中嵌入音频/视频播放器和 PDF 查看器
 
-### Internal Links
-- **Wikilinks** - `[[Note Name]]` Obsidian-style syntax for quick linking
-- **Wikilinks with display text** - `[[Note Name|Click here]]` to customize link text
-- **Section anchors** - `[[Note Name#heading]]` to link directly to a heading
-- **Same-page anchors** - `[[#heading]]` to link within the current note
-- **Broken link detection** - Non-existent note links shown dimmed
-- **Markdown links** - `[text](note.md)` standard syntax also supported
-- **Markdown section links** - `[text](note.md#heading)` for heading anchors
-- **Drag to link** - Drag notes or images into the editor to insert links
-- **Click to navigate** - Jump between notes seamlessly
-- **External links** - Open in new tabs automatically
+---
 
-### Outline Panel
-- **Table of Contents** - View all headings (H1-H6) in sidebar
-- **Click to navigate** - Jump to any heading in edit or preview mode
-- **Real-time updates** - Outline updates as you type
-- **Hierarchical view** - Indentation shows heading structure
-- **Heading count badge** - Quick indicator of document structure
+### 组织管理 / Organization
 
-### Section Link Syntax
-To link to a heading, convert the heading text to a slug: **lowercase, spaces → dashes, remove special chars**.
+- **文件夹层级** — 在嵌套文件夹中组织笔记
+- **拖拽移动** — 轻松移动笔记和文件夹
+- **字母排序** — 快速查找笔记
+- **重命名** — 即时重命名文件和文件夹
+- **可视化树形视图** — 可展开/折叠的导航结构
+- **隐藏系统文件夹** — 切换隐藏 `_attachments`、`_templates` 等下划线前缀文件夹
 
-| Heading | Slug | Link Example |
-|---------|------|--------------|
-| `## Getting Started` | `getting-started` | `[[note#getting-started]]` |
-| `### API Reference` | `api-reference` | `[API](note#api-reference)` |
-| `## What's New?` | `whats-new` | `[[#whats-new]]` (same page) |
+---
 
-### Direct URLs
-- **Deep linking** - Open specific notes via URL (e.g., `/folder/note`)
-- **Search highlighting** - Add `?search=term` to highlight specific content
-- **Browser history** - Back/forward buttons navigate between notes
-- **Shareable links** - Bookmark or share direct links to notes with highlighted terms
-- **Refresh safe** - Page reload keeps you on the same note with search context
-- **Copy link button** - One-click copy of note URL to clipboard
-- **Last edited indicator** - Shows relative time since last edit (e.g., "Edited 2h ago")
-- **Favorites** - Star notes for quick access; displayed at top of sidebar
+## 🔗 链接与发现 / Linking & Discovery
 
-## 🎨 Customization
+### 图谱视图 / Graph View
 
-### Themes
-- **16 built-in themes** - Light, Dark, Dracula, Nord, Monokai, Vue High Contrast, Cobalt2, VS Blue, Catppuccin Mocha, Gruvbox Dark, One Dark, One Light, Rose Pine, Solarized Light, Tokyo Night, Matcha Light
-- **Theme persistence** - Remembers your choice
-- **Custom themes** - Create your own CSS themes
-- **Instant switching** - No reload required
+- **交互式图谱** — 可视化所有笔记及其关联关系
+- **鼠标导航** — 拖拽平移、滚动缩放、双击节点打开笔记
+- **多类型链接** — 区分 Wikilink 和 Markdown 链接，颜色不同
+- **主题适配** — 图谱颜色根据当前主题自动调整
 
-### Layout
-- **Resizable sidebar** - Drag to adjust width
-- **View mode memory** - Remembers Edit/Split/Preview preference
-- **Responsive design** - Works on all screen sizes
+---
 
-## 📊 Note Statistics
+### 内部链接 / Internal Links
 
-### Features
-- **Word count** - Track document length
-- **Character count** - Including and excluding spaces
-- **Reading time** - Estimated minutes to read
-- **Line count** - Total lines in note
-- **Image count** - Track embedded images
-- **Link count** - Internal and external links (includes wikilinks)
-- **Wikilink count** - Separate count for `[[wikilinks]]`
-- **Expandable panel** - Toggle stats visibility
+- **Wiki 链接** — `[[笔记名称]]` Obsidian 风格语法，快速链接
+- **带显示文本的 Wiki 链接** — `[[笔记名称|点击这里]]` 自定义链接文本
+- **章节锚点** — `[[笔记名称#标题]]` 直接链接到标题
+- **同页锚点** — `[[#标题]]` 在当前笔记内链接
+- **断链检测** — 不存在的笔记链接显示为灰色
+- **Markdown 链接** — `[文本](笔记.md)` 标准语法也支持
+- **Markdown 章节链接** — `[文本](笔记.md#标题)` 标题锚点
+- **拖拽链接** — 拖拽笔记或图片到编辑器插入链接
+- **点击导航** — 无缝跳转到目标笔记
+- **外部链接** — 自动在新标签页打开
 
+---
 
-## 🏷️ Tags
+### 大纲面板 / Outline Panel
 
-Organize notes with tags defined in YAML frontmatter. See **[TAGS.md](TAGS.md)** for complete guide.
+- **目录视图** — 在侧边栏查看所有标题（H1-H6）
+- **点击导航** — 在编辑或预览模式下跳转到任意标题
+- **实时更新** — 输入时大纲同步更新
+- **层级视图** — 缩进显示标题结构
+- **标题计数徽章** — 快速了解文档结构
 
-### Quick Start
+---
+
+### 章节链接语法 / Section Link Syntax
+
+要链接到标题，将标题文本转换为 slug：**小写，空格→短横线，移除特殊字符**。
+
+| 原始标题 | Slug | 链接示例 |
+|---------|------|----------|
+| `## Getting Started` | `getting-started` | `[[笔记#getting-started]]` |
+| `### API Reference` | `api-reference` | `[API](笔记#api-reference)` |
+| `## What's New?` | `whats-new` | `[[#whats-new]]`（同页链接） |
+
+---
+
+### 直接 URL / Direct URLs
+
+- **深度链接** — 通过 URL 直接打开特定笔记（如 `/folder/note`）
+- **搜索高亮** — 添加 `?search=关键词` 高亮特定内容
+- **浏览器历史** — 后退/前进按钮在笔记间导航
+- **可分享链接** — 书签或分享带搜索上下文的笔记直链
+- **刷新安全** — 页面重载后仍停留在同一笔记，保留搜索上下文
+- **复制链接按钮** — 一键复制笔记 URL 到剪贴板
+- **最后编辑指示器** — 显示相对上次编辑的时间（如"2 小时前编辑"）
+- **收藏夹** — 星标笔记，快速访问；显示在侧边栏顶部
+
+---
+
+## 🎨 自定义 / Customization
+
+### 主题 / Themes
+
+- **16 种内置主题** — 11 种暗色 + 5 种亮色主题
+- **主题持久化** — 自动保存您的选择
+- **自定义主题** — 创建您自己的 CSS 主题
+- **即时切换** — 无需重载页面
+
+---
+
+### 布局 / Layout
+
+- **可调侧边栏** — 拖拽调整宽度
+- **视图模式记忆** — 记住编辑/分栏/预览偏好
+- **响应式设计** — 适配所有屏幕尺寸
+
+---
+
+## 📊 笔记统计 / Note Statistics
+
+### 统计功能包括
+
+- **字数统计** — 跟踪文档长度
+- **字符计数** — 包含和不包含空格两种统计
+- **阅读时间** — 估计阅读所需分钟数
+- **行数统计** — 笔记总行数
+- **图片计数** — 跟踪嵌入图片数量
+- **链接计数** — 内部和外部链接（包含 Wikilinks）
+- ** Wikilink 计数** — 单独统计 `[[wikilinks]]` 数量
+- **可展开面板** — 点击切换统计可见性
+
+---
+
+## 🏷️ 标签 / Tags
+
+使用 YAML frontmatter 中的标签组织笔记。完整指南请参阅 **[TAGS_CN.md](TAGS_CN.md)**。
+
+### 快速开始
+
 ```markdown
 ---
 tags: [python, tutorial, backend]
 ---
 
-# Your Note Content
+# 您的笔记内容
 ```
 
-### Features
-- **Click to filter** - Select tags to show matching notes
-- **Multiple tags** - Combine tags (AND logic - all must match)
-- **Tag counts** - See how many notes use each tag
-- **Collapsible panel** - Saves state across sessions
-- **Auto-sync** - Updates after saving notes
+---
 
-## ⚙️ Note Properties Panel
+### 功能亮点
 
-View and interact with YAML frontmatter metadata directly in the preview.
+- **点击过滤** — 选择标签显示匹配笔记
+- **多标签组合** — 组合标签使用 AND 逻辑（必须全部匹配）
+- **标签计数** — 查看每个标签的使用次数
+- **可折叠面板** — 跨会话保存状态
+- **自动同步** — 保存笔记后自动更新
 
-### Features
-- **Collapsible panel** - Compact bar at the top of preview, expands on click
-- **Auto-hides** - Only appears when note has frontmatter
-- **Clickable tags** - Filter notes by clicking any tag
-- **Smart formatting** - Dates formatted nicely, booleans shown as ✓/✗
-- **URL detection** - Links in metadata are clickable
-- **Real-time updates** - Changes as you edit frontmatter
-- **Performance optimized** - Cached parsing, no re-parse if unchanged
+---
 
-### Collapsed View
-Shows tags as pills plus up to 3 priority fields (date, author, status, etc.)
+## ⚙️ 笔记属性面板 / Note Properties Panel
 
-### Expanded View
-Click to expand and see all metadata fields in a clean grid layout.
+在预览中直接查看和交互 YAML frontmatter 元数据。
 
-### Supported Formats
+### 功能特性
+
+- **可折叠面板** — 预览顶部显示紧凑栏，点击展开详情
+- **自动隐藏** — 仅在笔记包含 frontmatter 时显示
+- **可点击标签** — 点击任意标签过滤笔记
+- **智能格式化** — 日期精美显示，布尔值显示为 ✓/✗
+- **URL 检测** — 元数据中的链接自动可点击
+- **实时更新** — 编辑 frontmatter 时同步变化
+- **性能优化** — 缓存解析结果，未更改时不重新解析
+
+---
+
+### 折叠视图 / Collapsed View
+
+显示标签徽章，最多展示 3 个优先字段（日期、作者、状态等）。
+
+### 展开视图 / Expanded View
+
+点击展开，在整洁的网格布局中查看所有元数据字段。
+
+---
+
+### 支持的格式
+
 ```yaml
 ---
-tags: [project, important]     # Inline array
-date: 2024-01-15               # Formatted as "Jan 15, 2024"
-author: John Doe               # String value
-status: draft                  # String value
-priority: high                 # String value
-source: https://example.com    # Clickable link
-draft: true                    # Shows as "✓ Yes"
-custom-field: any value        # Keys with hyphens supported
-items:                         # YAML list format
+tags: [project, important]     # 内联数组
+date: 2024-01-15               # 格式化为 "2024 年 1 月 15 日"
+author: John Doe               # 字符串值
+status: draft                  # 字符串值
+priority: high                 # 字符串值
+source: https://example.com    # 可点击链接
+draft: true                    # 显示为 "✓ 是"
+custom-field: any value        # 支持带连字符的键
+items:                         # YAML 列表格式
   - item 1
   - item 2
 ---
 ```
 
-## 🔍 Search & Filtering
+---
 
-### Text Search
-- **Content-only** - Searches note contents (not file/folder names)
-- **Real-time results** - As you type
-- **Highlight matches** - See context in results
-- **In-note highlighting** - Search terms highlighted in open notes
-- **Live highlighting** - Highlights update as you type or edit
+## 🔍 搜索与过滤 / Search & Filtering
 
-### Combined Filtering
-- **Tags + Search** - Combine text search with tag filters
-- **Smart display** - Shows flat list when filtering, tree view when browsing
-- **Empty states** - Clear "no matches" message with quick actions
+### 文本搜索 / Text Search
 
-## 🧮 Math & LaTeX Support
+- **仅搜索内容** — 搜索笔记内容（不含文件/文件夹名）
+- **实时结果** — 输入时即时显示匹配结果
+- **高亮匹配** — 在搜索结果中查看上下文高亮
+- **笔记内高亮** — 打开的笔记中搜索词高亮显示
+- **实时高亮更新** — 输入或编辑时高亮同步更新
 
-### Mathematical Notation
-- **Inline math** - Use `$...$` or `\(...\)` for equations within text
-- **Display math** - Use `$$...$$` or `\[...\]` for centered equations
-- **Full LaTeX support** - Powered by MathJax 3
-- **Greek letters** - `\alpha`, `\beta`, `\Gamma`, etc.
-- **Matrices** - `\begin{bmatrix}...\end{bmatrix}`
-- **Calculus** - Integrals, derivatives, limits
-- **Symbols** - All standard mathematical symbols
-- **Theme-aware** - Math colors adapt to your theme
+---
 
-### Example
+### 组合过滤 / Combined Filtering
+
+- **标签 + 搜索** — 结合文本搜索与标签过滤器
+- **智能显示切换** — 过滤时显示扁平列表，浏览时显示树形视图
+- **空状态提示** — 清晰的"无匹配"消息加快捷操作提示
+
+---
+
+## 🧮 数学与 LaTeX 支持 / Math & LaTeX Support
+
+### 数学符号 / Mathematical Notation
+
+- **行内数学** — 使用 `$...$` 或 `\(...\)` 在文本中插入公式
+- **独立数学** — 使用 `$$...$$` 或 `\[...\]` 显示居中公式块
+- **完整 LaTeX 支持** — 基于 MathJax 3 驱动
+- **希腊字母** — `\alpha`、`\beta`、`\Gamma` 等
+- **矩阵** — `\begin{bmatrix}...\end{bmatrix}` 支持
+- **微积分** — 积分、导数、极限符号
+- **标准数学符号** — 所有常用数学符号
+- **主题适配** — 数学公式颜色与当前主题保持一致
+
+---
+
+### 示例 / Example
+
 ```markdown
-Einstein's equation: $E = mc^2$
+爱因斯坦方程：$E = mc^2$
 
-The quadratic formula:
+求根公式：
 $$
 x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}
 $$
 ```
-Einstein's equation: $E = mc^2$
 
-The quadratic formula:
-$$
-x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}
-$$
+📄 **更多示例和语法参考请参阅 [MATHJAX_CN.md](MATHJAX_CN.md)。**
 
-📄 **See the [MATHJAX](MATHJAX.md) note for more examples and syntax reference.**
+---
 
-## 📊 Mermaid Diagrams
+## 📊 Mermaid 图表 / Mermaid Diagrams
 
-### Visual Diagrams
-- **Flowcharts** - Process flows and decision trees
-- **Sequence diagrams** - System interactions over time
-- **Class diagrams** - UML class relationships
-- **State diagrams** - State machines and transitions
-- **Gantt charts** - Project timelines
-- **Pie charts** - Data visualization
-- **Git graphs** - Branch and commit history
-- **Theme support** - Adapts to your theme
+### 可视化图表类型 / Diagram Types
 
-### Example
+- **流程图** — 流程图和决策树
+- **时序图** — 系统随时间交互的时序关系
+- **类图** — UML 类关系图
+- **状态图** — 状态机和转换图
+- **甘特图** — 项目时间线规划
+- **饼图** — 数据可视化
+- **Git 图** — 分支和提交历史
+- **主题支持** — 图表颜色适配当前主题
+
+---
+
+### 示例 / Example
+
 ````markdown
 ```mermaid
 graph TD
-    A[Start] --> B{Is it working?}
-    B -->|Yes| C[Great!]
-    B -->|No| D[Debug]
+    A[开始] --> B{能工作吗？}
+    B -->|是| C[太好了！]
+    B -->|否| D[调试]
     D --> B
 ```
 ````
 
-📄 **See the [MERMAID](MERMAID.md) note for diagram examples and syntax reference.**
+📄 **更多图表示例和语法参考请参阅 [MERMAID_CN.md](MERMAID_CN.md)。**
 
-## 📄 Note Templates
+---
 
-Create notes from reusable templates with dynamic placeholder replacement.
+## 📄 笔记模板 / Note Templates
 
-### Creating Templates
-1. Create markdown files in `data/_templates/` folder
-2. Use placeholders for dynamic content
-3. Templates appear in the "New from Template" menu
+使用可重用模板创建笔记，支持动态占位符自动替换。
 
-### Available Placeholders
-- `{{date}}` - Current date (YYYY-MM-DD)
-- `{{time}}` - Current time (HH:MM:SS)
-- `{{datetime}}` - Current date and time
-- `{{timestamp}}` - Unix timestamp
-- `{{year}}` - Current year (YYYY)
-- `{{month}}` - Current month (MM)
-- `{{day}}` - Current day (DD)
-- `{{title}}` - Note name (without extension)
-- `{{folder}}` - Parent folder name
+### 创建模板
 
-### Example Template
+1. 在 `data/_templates/` 文件夹中创建 Markdown 文件
+2. 使用占位符表示需要动态替换的内容
+3. 模板会自动出现在"从模板新建"菜单中
+
+---
+
+### 可用占位符 / Available Placeholders
+
+| 占位符 | 替换为 | 示例 |
+|--------|--------|------|
+| `{{date}}` | 当前日期（YYYY-MM-DD） | 2025-01-15 |
+| `{{time}}` | 当前时间（HH:MM:SS） | 14:30:00 |
+| `{{datetime}}` | 完整日期时间 | 2025-01-15 14:30:00 |
+| `{{timestamp}}` | Unix 时间戳（秒） | 1736958600 |
+| `{{year}}` | 当前年份（YYYY） | 2025 |
+| `{{month}}` | 当前月份（MM） | 01 |
+| `{{day}}` | 当前日期（DD） | 15 |
+| `{{title}}` | 笔记名称（不含扩展名） | weekly-report |
+| `{{folder}}` | 父文件夹名称 | reports |
+
+---
+
+### 示例模板
+
 ```markdown
 ---
 tags: [meeting]
@@ -259,95 +328,118 @@ date: {{date}}
 
 # {{title}}
 
-**Created:** {{datetime}}
+**创建于：** {{datetime}}
 
-## Notes
+## 会议内容
 
+## 行动项
+
+## 下一步计划
 ```
-
-### Using Templates
-1. Click the "New" dropdown button
-2. Select "New from Template"
-3. Choose a template and enter a note name
-4. The new note will be created with placeholders replaced
-
-### Built-in Templates
-- **meeting-notes** - Template for meeting notes
-- **daily-journal** - Daily journal with morning goals and evening reflection
-- **project-plan** - Project planning template with objectives and timeline
-
-📚 **See [TEMPLATES.md](TEMPLATES.md)** for detailed documentation and example templates you can copy to your instance.
-
-## ⚡ Keyboard Shortcuts
-
-### General
-
-| Windows/Linux | Mac | Action |
-|---------------|-----|--------|
-| `Ctrl+Alt+P` | `Cmd+Option+P` | Quick Switcher (jump to any note) |
-| `Ctrl+S` | `Cmd+S` | Save note |
-| `Ctrl+Alt+N` | `Cmd+Option+N` | New note |
-| `Ctrl+Alt+F` | `Cmd+Option+F` | New folder |
-| `Ctrl+Z` | `Cmd+Z` | Undo |
-| `Ctrl+Y` or `Ctrl+Shift+Z` | `Cmd+Y` or `Cmd+Shift+Z` | Redo |
-| `Ctrl+Alt+Z` | `Cmd+Option+Z` | Toggle Zen Mode |
-| `Esc` | `Esc` | Exit Zen Mode |
-| `F3` | `F3` | Next search match |
-| `Shift+F3` | `Shift+F3` | Previous search match |
-
-> **Note for Mac users:** Some Option-based shortcuts (`Cmd+Option+N/F/T`) may conflict with browser shortcuts in Chrome/Brave. Safari has better compatibility. If shortcuts don't work, try using `Ctrl` instead of `Cmd`, or use the UI buttons.
-
-### Markdown Formatting
-
-| Windows/Linux | Mac | Action | Result |
-|---------------|-----|--------|--------|
-| `Ctrl+B` | `Cmd+B` | Bold | `**text**` |
-| `Ctrl+I` | `Cmd+I` | Italic | `*text*` |
-| `Ctrl+K` | `Cmd+K` | Insert link (in editor) | `[text](url)` |
-| `Ctrl+Alt+T` | `Cmd+Option+T` | Insert table | 3x3 table placeholder |
-
-> **Tip:** Use `Ctrl+Alt+P` to quickly jump to any note from anywhere in the app.
-
-## 🧘 Zen Mode
-
-Full immersive distraction-free writing experience:
-
-- **Full screen** - Uses browser Fullscreen API for true immersion
-- **Hidden UI** - Sidebar, toolbar, and stats bar disappear
-- **Centered editor** - Comfortable width for optimal reading
-- **Larger text** - 18px font size with relaxed line spacing
-- **Quick access** - Button in toolbar or `Ctrl+Alt+Z` / `Cmd+Option+Z` shortcut
-- **Easy exit** - Press `Esc`, click exit button, or use shortcut again
-- **State preserved** - Returns to your previous view mode on exit
-
-## 📱 Progressive Web App (PWA)
-
-GoNote can be installed as a standalone app on your device:
-
-- **Install as app** - Add to home screen on mobile, or install via browser on desktop
-- **Standalone mode** - Runs without browser chrome for a native app feel
-
-### How to Install
-- **Desktop (Chrome/Edge)**: Click the install icon in the address bar, or Menu → "Install GoNote"
-- **Android**: Chrome Menu → "Add to Home Screen"
-- **iOS**: Safari Share → "Add to Home Screen"
-
-## 🌍 Internationalization
-
-- **Built-in languages** - English (en-US), Simplified Chinese (zh-CN)
-- **Easy to add** - Drop JSON files in `locales/` folder
-- **Instant switch** - Change language in Settings without reload
-- **Community translations** - Contributions welcome!
-
-## 🚀 Performance
-
-- **Instant loading** - No lag, no loading spinners
-- **Efficient caching** - Smart local storage
-- **Minimal resources** - Runs on modest hardware
-- **No bloat** - Focused on what matters
-- **Lightweight** - No heavy frameworks
 
 ---
 
-💡 **Tip:** Explore the interface! Most features are discoverable through intuitive drag & drop and hover menus.
+### 使用模板 / Using Templates
 
+1. 点击"新建"下拉按钮
+2. 选择"从模板新建"
+3. 选择模板并输入笔记名称
+4. 新笔记将自动创建，所有占位符替换完成
+
+---
+
+### 内置模板 / Built-in Templates
+
+- **meeting-notes** — 会议笔记模板
+- **daily-journal** — 每日日志，含晨间目标和晚间反思
+- **project-plan** — 项目规划模板，包含目标和时间线
+
+📚 **详见 [TEMPLATES_CN.md](TEMPLATES_CN.md)** 获取详细文档和可复制到您实例的示例模板。
+
+---
+
+## ⚡ 键盘快捷键 / Keyboard Shortcuts
+
+### 通用快捷键 / General
+
+| Windows/Linux | macOS | 操作 |
+|---------------|-------|------|
+| `Ctrl+Alt+P` | `Cmd+Option+P` | 快速切换器（跳转到任意笔记） |
+| `Ctrl+S` | `Cmd+S` | 保存笔记 |
+| `Ctrl+Alt+N` | `Cmd+Option+N` | 新建笔记 |
+| `Ctrl+Alt+F` | `Cmd+Option+F` | 新建文件夹 |
+| `Ctrl+Z` | `Cmd+Z` | 撤销 |
+| `Ctrl+Y` 或 `Ctrl+Shift+Z` | `Cmd+Y` 或 `Cmd+Shift+Z` | 重做 |
+| `Ctrl+Alt+Z` | `Cmd+Option+Z` | 切换禅模式 |
+| `Esc` | `Esc` | 退出禅模式 |
+| `F3` | `F3` | 下一个搜索匹配 |
+| `Shift+F3` | `Shift+F3` | 上一个搜索匹配 |
+
+> **Mac 用户注意：** 某些 Option 基础快捷键（`Cmd+Option+N/F/T`）可能与 Chrome/Brave 浏览器快捷键冲突。Safari 兼容性更好。如果快捷键不工作，尝试使用 `Ctrl` 代替 `Cmd`，或使用 UI 按钮。
+
+---
+
+### Markdown 格式化 / Markdown Formatting
+
+| Windows/Linux | macOS | 操作 | 结果 |
+|---------------|-------|------|------|
+| `Ctrl+B` | `Cmd+B` | 粗体 | `**文本**` |
+| `Ctrl+I` | `Cmd+I` | 斜体 | `*文本*` |
+| `Ctrl+K` | `Cmd+K` | 插入链接（编辑器中） | `[文本](URL)` |
+| `Ctrl+Alt+T` | `Cmd+Option+T` | 插入表格 | 3×3 表格占位符 |
+
+> **提示：** 使用 `Ctrl+Alt+P` 从应用任意位置快速跳转到任意笔记。
+
+---
+
+## 🧘 禅模式 / Zen Mode
+
+全沉浸无干扰写作体验：
+
+- **全屏** — 使用浏览器全屏 API 实现真正沉浸
+- **隐藏 UI** — 侧边栏、工具栏和统计栏全部隐藏
+- **居中编辑器** — 舒适宽度，最佳阅读体验
+- **更大文本** — 18px 字体大小，宽松行距
+- **快速访问** — 工具栏按钮或 `Ctrl+Alt+Z` / `Cmd+Option+Z` 快捷键
+- **轻松退出** — 按 `Esc`、点击退出按钮，或再次使用快捷键
+- **状态保留** — 退出后返回您之前的视图模式
+
+---
+
+## 📱 渐进式 Web 应用（PWA）/ Progressive Web App
+
+GoNote 可作为独立应用安装在您的设备上：
+
+- **安装为应用** — 移动端添加到主屏幕，桌面端通过浏览器安装
+- **独立模式** — 无浏览器 chrome 运行，体验接近原生应用
+
+---
+
+### 如何安装 / How to Install
+
+- **桌面端（Chrome/Edge）**：点击地址栏安装图标，或菜单 → "安装 GoNote"
+- **Android**：Chrome 菜单 → "添加到主屏幕"
+- **iOS**：Safari 分享 → "添加到主屏幕"
+
+---
+
+## 🌍 国际化 / Internationalization
+
+- **多语言支持** — 英语（en-US）、简体中文（zh-CN）等内置语言
+- **易于扩展** — 将 JSON 语言文件放入 `locales/` 文件夹即可添加
+- **即时切换** — 在设置中更改语言，无需重载页面
+- **社区翻译** — 欢迎社区贡献翻译！
+
+---
+
+## 🚀 性能特性 / Performance
+
+- **即时加载** — 无延迟，无加载旋转指示器
+- **高效缓存** — 智能本地存储策略
+- **最小资源占用** — 在普通硬件上流畅运行
+- **无臃肿设计** — 专注核心功能
+- **轻量级架构** — 无重型前端框架依赖
+
+---
+
+**💡 探索提示：** 多尝试界面交互！大部分功能通过直观的拖放和悬停菜单即可发现。

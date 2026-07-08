@@ -2,48 +2,55 @@ name: Go Tests
 
 on:
   push:
-    branches: [ Go, main, master ]
+    branches: [Go, main, master]
+    paths:
+      - 'go/**'
+      - '.github/workflows/go-test.yml'
   pull_request:
-    branches: [ Go, main, master ]
+    branches: [Go, main, master]
+    paths:
+      - 'go/**'
+      - '.github/workflows/go-test.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
     runs-on: ubuntu-latest
-    
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: go
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: '1.24'
-        cache: true
-        cache-dependency-path: go/go.sum
-    
-    - name: Install dependencies
-      run: |
-        cd go
-        go mod download
-    
-    - name: Run go vet
-      run: |
-        cd go
-        go vet ./...
-    
-    - name: Run tests with race detector
-      run: |
-        cd go
-        go test ./... -race -coverprofile=coverage.out -covermode=atomic
-    
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v4
-      with:
-        file: ./go/coverage.out
-        flags: unittests
-        name: codecov-go
-        fail_ci_if_error: false
-    
-    - name: Build
-      run: |
-        cd go
-        go build -v ./...
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
+          cache-dependency-path: go/go.sum
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Run tests with race detector
+        run: go test ./... -race -coverprofile=coverage.out -covermode=atomic
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./go/coverage.out
+          flags: unittests
+          name: codecov-go
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Build
+        run: go build -v ./...

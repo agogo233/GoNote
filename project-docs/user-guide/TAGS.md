@@ -1,33 +1,37 @@
-# 🏷️ Tags
+# 🏷️ 标签系统
 
-## Overview
+使用 YAML frontmatter 中定义的标签组织和过滤您的笔记。
 
-Organize and filter your notes using tags defined in YAML frontmatter.
+---
 
-## Basic Usage
+## 📋 基本用法
 
-Add tags to the top of your note:
+在笔记顶部添加标签 frontmatter：
 
 ```markdown
 ---
 tags: [python, tutorial]
 ---
 
-# Your Note Content
+# 您的笔记内容
 
-The rest of your note goes here...
+这里是笔记正文...
 ```
 
-## Syntax Formats
+---
 
-### Inline Array (Recommended)
+## 🔤 语法格式
+
+### 推荐：内联数组格式
+
 ```yaml
 ---
 tags: [python, tutorial, backend]
 ---
 ```
 
-### Multi-line List
+### 多行列表格式
+
 ```yaml
 ---
 tags:
@@ -37,75 +41,110 @@ tags:
 ---
 ```
 
-### Single Tag
+### 单个标签
+
 ```yaml
 ---
 tags: python
 ---
 ```
 
-## Features
+---
 
-### Filtering
-- Click any tag in the sidebar to filter notes
-- Select multiple tags to combine filters (AND logic)
-- Only notes with ALL selected tags are shown
-- Tag count badge shows number of notes per tag
+## 🎯 核心功能
 
-### Combined Search
-- Use tags alone to filter by category
-- Use text search alone to find content
-- Combine both to narrow results (e.g., search "async" in notes tagged "python")
+### 过滤笔记
 
-### Display Modes
+- 点击侧边栏中的任意标签以过滤笔记
+- 选择**多个标签**组合过滤器（AND 逻辑）
+- 仅显示**同时具有所有选中标签**的笔记
+- 标签计数徽章显示每个标签的使用次数
 
-| Filter Type | Display |
-|------------|---------|
-| None | Full folder tree |
-| Tags only | Flat list of matching notes |
-| Text only | Search results with matches |
-| Tags + Text | Combined filtered results |
+### 搜索与标签组合
 
-## Tips
+- 单独使用标签：按类别过滤
+- 单独使用文本搜索：查找内容
+- 两者结合：缩小结果范围（如：在标记为"python"的笔记中搜索"async"）
 
-- **Tag names**: Lowercase, no spaces (e.g., `python`, `work-notes`)
-- **Consistency**: Use consistent tag names across notes
-- **Hierarchy**: Use related tags (e.g., `python`, `python-async`, `python-web`)
-- **Don't overdo it**: 3-5 tags per note is usually sufficient
+---
 
-## Frontmatter Rules
+### 显示模式说明
 
-- Must start with `---` on the first line
-- Must end with `---` on its own line
-- Content between markers is YAML format
-- Frontmatter is hidden from preview
+| 过滤模式 | 显示结果 |
+|---------|---------|
+| 无过滤 | 完整文件夹树 |
+| 仅标签 | 匹配笔记的扁平列表 |
+| 仅文本搜索 | 带匹配项的搜索结果 |
+| 标签 + 文本 | 组合过滤的结果 |
 
-## Examples
+---
 
-### Project Organization
+## 💡 使用建议
+
+- **标签命名**：小写字母，用连字符代替空格（如 `python`、`work-notes`）
+- **保持一致性**：跨笔记使用统一的标签名称
+- **层级组织**：使用相关标签组合（如 `python`、`python-async`、`python-web`）
+- **避免过度**：每个笔记 3-5 个标签通常足够
+
+---
+
+## 📝 Frontmatter 规则
+
+Frontmatter 必须遵循 YAML 格式规范：
+
+- 第一行必须是单独的三连字符 `---`
+- 最后一行必须是单独的三连字符 `---`
+- `---` 之间的内容为 YAML 格式
+- Frontmatter 在预览模式中自动隐藏
+
+---
+
+## 🌰 示例
+
+### 项目笔记
+
 ```markdown
 ---
 tags: [project, backend, api]
 ---
 
-# API Documentation
+# API 文档
+
+本文档描述后端 API...
 ```
 
-### Knowledge Base
+### 知识库
+
 ```markdown
 ---
 tags: [tutorial, beginner, docker]
 ---
 
-# Getting Started with Docker
+# Docker 入门指南
+
+学习 Docker 基础知识...
 ```
 
-### Work Notes
+### 工作笔记
+
 ```markdown
 ---
 tags: [meeting, q4-2024, planning]
 ---
 
-# Q4 Planning Meeting Notes
+# Q4 规划会议
+
+会议记录...
 ```
 
+---
+
+## 🔗 相关文档
+
+- [功能概览（FEATURES_CN.md）](../user-guide/FEATURES_CN.md) — 完整功能列表
+- [笔记模板（TEMPLATES_CN.md）](../user-guide/TEMPLATES_CN.md) — 使用模板快速创建带标签的笔记
+
+---
+
+**文档版本**：v1.0  
+**最后更新**：2025 年 1 月
