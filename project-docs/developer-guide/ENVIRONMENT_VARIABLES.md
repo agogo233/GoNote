@@ -266,8 +266,8 @@ upload:
 
 ## 📚 相关文档 / Related Documentation
 
-- **认证配置**：[../security/AUTHENTICATION_CN.md](../security/AUTHENTICATION_CN.md)
-- **API 文档**：[API_CN.md](API_CN.md#rate-limiting-限流)
+- **认证配置**：[../security/AUTHENTICATION.md](../security/AUTHENTICATION.md)
+- **API 文档**：[API.md](API.md#rate-limiting-限流)
 - **配置文件**：`go/config.yaml`（项目根目录）
 
 ---

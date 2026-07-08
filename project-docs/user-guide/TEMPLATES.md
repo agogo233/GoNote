@@ -262,8 +262,8 @@ cp project-docs/templates/*.md data/_templates/
 
 ## 🔗 相关功能
 
-- **标签系统** — [TAGS_CN.md](TAGS_CN.md) 了解如何使用标签组织笔记
-- **功能概览** — [FEATURES_CN.md](FEATURES_CN.md) 查看所有功能特性
+- **标签系统** — [TAGS.md](TAGS.md) 了解如何使用标签组织笔记
+- **功能概览** — [FEATURES.md](FEATURES.md) 查看所有功能特性
 
 ---
 

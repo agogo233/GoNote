@@ -141,8 +141,8 @@ tags: [meeting, q4-2024, planning]
 
 ## 🔗 相关文档
 
-- [功能概览（FEATURES_CN.md）](../user-guide/FEATURES_CN.md) — 完整功能列表
-- [笔记模板（TEMPLATES_CN.md）](../user-guide/TEMPLATES_CN.md) — 使用模板快速创建带标签的笔记
+- [功能概览（FEATURES.md）](../user-guide/FEATURES.md) — 完整功能列表
+- [笔记模板（TEMPLATES.md）](../user-guide/TEMPLATES.md) — 使用模板快速创建带标签的笔记
 
 ---
 

@@ -12,15 +12,18 @@ test-results/
 
 # ==================== Go ====================
 # Build artifacts
+/bin/
 go/server
 go/main
- go/gonote
+go/gonote
 go/*.test
 go/test.log
 
 # Test data (generated)
 go/data-test/
 go/config.test.yaml
+go/testdata/_templates/APITemplate*.md
+go/testdata/_templates/PlaceholderTemplate*.md
 
 # ==================== Data Directories (user data) ====================
 data/
@@ -73,14 +76,12 @@ cookies.txt
 AGENTS.md
 
 # ==================== Build Outputs ====================
-shared/assets/css/tailwind.css
 
 # ==================== Test Coverage ====================
 coverage/
 *.cover
 
 # ==================== Legacy / Migration ====================
-docs/go-migration
 .sisyphus
 dont-upload/
 go/coverage.out

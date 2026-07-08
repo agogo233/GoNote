@@ -507,10 +507,10 @@ cd go && go run cmd/server/main.go
 
 ## 📚 相关文档 / Related Documentation
 
-- [安全指南（SECURITY_CN.md）](../security/SECURITY_CN.md) - 完整安全建议
-- [环境变量参考（ENVIRONMENT_VARIABLES_CN.md）](../developer-guide/ENVIRONMENT_VARIABLES_CN.md) - 所有配置项
-- [部署指南（DEPLOY_CN.md）](../developer-guide/DEPLOY_CN.md) - 各平台部署步骤
-- [API 文档（API_CN.md）](../developer-guide/API_CN.md) - 认证相关 API 端点
+- [安全指南（SECURITY.md）](../security/SECURITY.md) - 完整安全建议
+- [环境变量参考（ENVIRONMENT_VARIABLES.md）](../developer-guide/ENVIRONMENT_VARIABLES.md) - 所有配置项
+- [部署指南（DEPLOY.md）](../developer-guide/DEPLOY.md) - 各平台部署步骤
+- [API 文档（API.md）](../developer-guide/API.md) - 认证相关 API 端点
 
 ---
 

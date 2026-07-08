@@ -231,20 +231,20 @@ Want to learn more? Check out our comprehensive documentation.
 
 ### 中文文档
 
-- **[功能列表](project-docs/user-guide/FEATURES_CN.md)** — 完整功能列表和键盘快捷键
-- **[主题定制](project-docs/user-guide/THEMES_CN.md)** — 主题自定义和创建自定义主题
-- **[标签系统](project-docs/user-guide/TAGS_CN.md)** — 使用标签和组合过滤组织笔记
-- **[笔记模板](project-docs/user-guide/TEMPLATES_CN.md)** — 使用可重用模板创建笔记
-- **[数学公式](project-docs/user-guide/MATHJAX_CN.md)** — LaTeX/MathJax 示例和语法参考
-- **[Mermaid 图表](project-docs/user-guide/MERMAID_CN.md)** — 使用 Mermaid 创建图表
-- **[笔记分享](project-docs/user-guide/SHARING_CN.md)** — 使用分享令牌分享笔记
+- **[功能列表](project-docs/user-guide/FEATURES.md)** — 完整功能列表和键盘快捷键
+- **[主题定制](project-docs/user-guide/THEMES.md)** — 主题自定义和创建自定义主题
+- **[标签系统](project-docs/user-guide/TAGS.md)** — 使用标签和组合过滤组织笔记
+- **[笔记模板](project-docs/user-guide/TEMPLATES.md)** — 使用可重用模板创建笔记
+- **[数学公式](project-docs/user-guide/MATHJAX.md)** — LaTeX/MathJax 示例和语法参考
+- **[Mermaid 图表](project-docs/user-guide/MERMAID.md)** — 使用 Mermaid 创建图表
+- **[笔记分享](project-docs/user-guide/SHARING.md)** — 使用分享令牌分享笔记
 
-- **[API 文档](project-docs/developer-guide/API_CN.md)** — REST API 文档和示例
-- **[环境变量](project-docs/developer-guide/ENVIRONMENT_VARIABLES_CN.md)** — 通过环境变量配置设置
-- **[Docker 部署](project-docs/developer-guide/DOCKER_DEPLOYMENT_CN.md)** — Docker 部署完整指南（路径映射、故障排查）
-- **[认证说明](project-docs/security/AUTHENTICATION_CN.md)** — 启用实例的密码保护
-- **[安全指南](project-docs/security/SECURITY_CN.md)** — 安全指南和最佳实践
-- **[测试指南](project-docs/developer-guide/TESTING_CN.md)** — 如何运行测试和贡献测试
+- **[API 文档](project-docs/developer-guide/API.md)** — REST API 文档和示例
+- **[环境变量](project-docs/developer-guide/ENVIRONMENT_VARIABLES.md)** — 通过环境变量配置设置
+- **[Docker 部署](project-docs/developer-guide/DOCKER_DEPLOYMENT.md)** — Docker 部署完整指南（路径映射、故障排查）
+- **[认证说明](project-docs/security/AUTHENTICATION.md)** — 启用实例的密码保护
+- **[安全指南](project-docs/security/SECURITY.md)** — 安全指南和最佳实践
+- **[测试指南](project-docs/developer-guide/TESTING.md)** — 如何运行测试和贡献测试
 
 ---
 
@@ -348,7 +348,7 @@ GoNote 专为**自托管、私密使用**而设计。适合在本地机器或家
 7. ✅ **启用安全 Cookie** — 使用 HTTPS 时设置 `secure_cookie: true`
 8. ✅ **更新默认密钥** — 生成新的随机值替换默认值
 
-完整安全指南请参阅 **[SECURITY_CN.md](project-docs/security/SECURITY_CN.md)**。
+完整安全指南请参阅 **[SECURITY.md](project-docs/security/SECURITY.md)**。
 
 ---
 
@@ -442,7 +442,7 @@ We welcome contributions! Before submitting a pull request:
 2. Open an issue first to discuss major features or significant changes
 3. Ensure your code follows the project's style and philosophy
 
-See [DEVELOPMENT.md](project-docs/developer-guide/DEVELOPMENT_CN.md) for detailed development setup.
+See [DEVELOPMENT.md](project-docs/developer-guide/DEVELOPMENT.md) for detailed development setup.
 
 ### 贡献指南
 
@@ -452,7 +452,7 @@ See [DEVELOPMENT.md](project-docs/developer-guide/DEVELOPMENT_CN.md) for detaile
 2. 先提交 issue 讨论主要功能或重大更改
 3. 确保您的代码符合项目的风格与理念
 
-详细开发环境设置请参阅 [开发指南](project-docs/developer-guide/DEVELOPMENT_CN.md)。
+详细开发环境设置请参阅 [开发指南](project-docs/developer-guide/DEVELOPMENT.md)。
 
 ---
 

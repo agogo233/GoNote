@@ -193,7 +193,7 @@ Tailwind 的入口 CSS 文件，通常包含：
 - [Tailwind CSS 官方文档](https://tailwindcss.com/docs)
 - [PostCSS 官方文档](https://postcss.org/docs/)
 - [项目 README](../README.md) - 快速开始
-- [ASSETS.md](../ASSETS.md) - 资源目录说明
+- [ASSETS.md](./ASSETS.md) - 资源目录说明
 
 ---
 

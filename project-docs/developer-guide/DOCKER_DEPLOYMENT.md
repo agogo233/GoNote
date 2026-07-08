@@ -465,7 +465,7 @@ services:
       - RATE_LIMIT_ENABLED=true
 ```
 
-完整的环境变量参考：[ENVIRONMENT_VARIABLES_CN.md](./ENVIRONMENT_VARIABLES_CN.md)
+完整的环境变量参考：[ENVIRONMENT_VARIABLES.md](./ENVIRONMENT_VARIABLES.md)
 
 ---
 
@@ -478,15 +478,15 @@ services:
 5. **限制 CORS**：不要使用 `allowed_origins: ["*"]`
 6. **定期备份**：定期备份 `./data/` 目录
 
-详细安全指南：[SECURITY_CN.md](../security/SECURITY_CN.md)
+详细安全指南：[SECURITY.md](../security/SECURITY.md)
 
 ---
 
 ## 相关文档
 
-- [ENVIRONMENT_VARIABLES_CN.md](./ENVIRONMENT_VARIABLES_CN.md) - 环境变量完整参考
-- [DEPLOY_CN.md](./DEPLOY_CN.md) - 部署配置总览
-- [SECURITY_CN.md](../security/SECURITY_CN.md) - 安全最佳实践
+- [ENVIRONMENT_VARIABLES.md](./ENVIRONMENT_VARIABLES.md) - 环境变量完整参考
+- [DEPLOY.md](./DEPLOY.md) - 部署配置总览
+- [SECURITY.md](../security/SECURITY.md) - 安全最佳实践
 - [README.md](../../README.md) - 项目快速入门
 
 ---

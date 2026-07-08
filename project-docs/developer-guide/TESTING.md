@@ -339,7 +339,7 @@ dlv test ./internal/handlers
 ## 📚 相关文档
 
 - [贡献指南](../../CONTRIBUTING.md）— PR 要求和测试准则
-- [API 文档](../developer-guide/API_CN.md）— 被测试的端点
+- [API 文档](../developer-guide/API.md）— 被测试的端点
 - [安全专项](../../security/）— 安全测试说明
 
 ---

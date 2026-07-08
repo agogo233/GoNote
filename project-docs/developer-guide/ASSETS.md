@@ -8,55 +8,11 @@
 
 ```
 shared/
-├── assets/          # 项目自有资源（编译后的 CSS、图标、图片）
 ├── frontend/        # 前端源代码（HTML、JavaScript、CSS）
 │   └── libs/        # 第三方库（Tailwind CSS 等）
 ├── locales/         # 国际化翻译文件（JSON）
 ├── themes/          # 用户自定义主题 CSS
 └── README.md        # 本目录说明
-```
-
----
-
-## 🎨 assets/ — 项目自有资源
-
-存放由 GoNote 项目创建和维护的资源文件。
-
-### ✅ 应该放在这里的内容
-
-- 编译后的 CSS 文件（Tailwind 输出）
-- 官方 GoNote 标志和图标（SVG、PNG）
-- 营销图片和宣传截图
-- 邮件模板和社交媒体图片
-- Favicon 和 PWA 资源文件
-
-### ❌ 不应该放在这里的内容
-
-- ❌ 第三方库（请使用 `shared/frontend/libs/`）
-- ❌ 用户生成内容（请使用 `data/`）
-- ❌ 主题文件（请使用 `shared/themes/`）
-- ❌ 翻译文件（请使用 `shared/locales/`）
-
----
-
-### CSS 构建输出
-
-编译后的 Tailwind CSS 输出到：
-
-```
-shared/assets/css/tailwind.css
-```
-
-**构建命令：**
-
-```bash
-# 从项目根目录构建
-npm run css-build
-
-# 或直接使用 tailwindcss
-npx tailwindcss -i ./build/tailwind/input.css \
-  -o ./shared/assets/css/tailwind.css \
-  --minify
 ```
 
 ---
@@ -150,7 +106,7 @@ shared/frontend/
 - **内置主题** — 位于 `shared/themes/` 目录下
 - **用户自定义主题** — 用户放置在 `gonote/themes/`（Docker 挂载或直接创建）
 
-详见 [用户指南 - 主题定制](../user-guide/THEMES_CN.md)。
+详见 [用户指南 - 主题定制](../user-guide/THEMES.md)。
 
 ---
 
@@ -162,7 +118,6 @@ shared/frontend/
 | `shared/themes/` | 内置及自定义主题 | `dark.css`, `dracula.css` |
 | `shared/locales/` | 翻译文件 | `en-US.json`, `zh-CN.json` |
 | `data/` | 用户笔记数据（不在 shared/） | `notes/`, `cache/`, `temp/` |
-| `docs/` | 网站文档资源 | 营销图片、API 文档资源 |
 | `build/` | 构建配置文件 | Tailwind 配置、PostCSS 配置 |
 
 ---
@@ -205,7 +160,7 @@ shared/frontend/
 - `build/tailwind/tailwind.config.js` — Tailwind 配置
 - `build/tailwind/postcss.config.js` — PostCSS 配置
 
-完整构建说明请参阅 [BUILD.md](../developer-guide/BUILD_CN.md)。
+完整构建说明请参阅 [BUILD.md](./BUILD.md)。
 
 ---
 
@@ -221,6 +176,6 @@ shared/frontend/
 
 **相关文档：**
 
-- [BUILD_CN.md](../developer-guide/BUILD_CN.md) — CSS 构建配置详解
-- [THEMES_CN.md](../user-guide/THEMES_CN.md) — 主题使用与开发指南
-- [AUTHENTICATION_CN.md](../security/AUTHENTICATION_CN.md) — 认证配置说明
+- [BUILD.md](../developer-guide/BUILD.md) — CSS 构建配置详解
+- [THEMES.md](../user-guide/THEMES.md) — 主题使用与开发指南
+- [AUTHENTICATION.md](../security/AUTHENTICATION.md) — 认证配置说明

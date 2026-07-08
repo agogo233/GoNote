@@ -272,9 +272,9 @@ cd go && go run cmd/server/main.go
 
 ## 📚 相关文档
 
-- [开发者指南 - 环境变量](../developer-guide/ENVIRONMENT_VARIABLES_CN.md) - 通过环境变量切换主题
-- [API 文档](../developer-guide/API_CN.md) - 主题相关 API 端点
-- [配置文件参考](../developer-guide/DEPLOY_CN.md#配置文件说明) - 默认主题配置
+- [开发者指南 - 环境变量](../developer-guide/ENVIRONMENT_VARIABLES.md) - 通过环境变量切换主题
+- [API 文档](../developer-guide/API.md) - 主题相关 API 端点
+- [配置文件参考](../developer-guide/DEPLOY.md#配置文件说明) - 默认主题配置
 
 ---
 

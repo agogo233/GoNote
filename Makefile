@@ -42,7 +42,7 @@ data-clean:
 	@echo "Cleaned temporary files and old cache"
 
 clean-build:
-	rm -rf go/server go/main go/gonote go/*.test go/test.log
+	rm -rf bin go/server go/main go/*.test go/test.log
 	@echo "Cleaned build artifacts"
 
 clean: clean-data clean-build
@@ -50,7 +50,7 @@ clean: clean-data clean-build
 
 # Build
 build:
-	cd go && go build -o ../gonote ./cmd/server
+	mkdir -p bin && cd go && go build -o ../bin/gonote ./cmd/server
 
 run:
 	go run go/cmd/server/main.go --config go/config.yaml

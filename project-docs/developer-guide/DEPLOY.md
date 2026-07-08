@@ -346,8 +346,8 @@ go run go/cmd/server/main.go --config go/config.yaml
 ```bash
 make build
 
-# 二进制文件位于项目根目录
-./gonote --config go/config.yaml
+# 二进制文件位于 ./bin/gonote
+./bin/gonote --config go/config.yaml
 ```
 
 **手动构建**：
@@ -377,13 +377,13 @@ cd ..
 | 6 | **启用 HTTPS** | 生产环境必须使用 HTTPS，并设置 `secure_cookie: true` 或启用自动检测 |
 | 7 | **使用反向代理** | 建议使用 nginx/Caddy 作为反向代理处理 SSL 终止 |
 
-详细安全指南请参阅 [../security/SECURITY_CN.md](../security/SECURITY_CN.md)。
+详细安全指南请参阅 [../security/SECURITY.md](../security/SECURITY.md)。
 
 ---
 
 ## ⚙️ 环境变量参考 / Environment Variables Reference
 
-所有配置都可以通过环境变量覆盖，详见 [ENVIRONMENT_VARIABLES_CN.md](ENVIRONMENT_VARIABLES_CN.md)。
+所有配置都可以通过环境变量覆盖，详见 [ENVIRONMENT_VARIABLES.md](ENVIRONMENT_VARIABLES.md)。
 
 **常用生产环境变量示例**（Docker Compose `.env` 文件）：
 
@@ -607,13 +607,13 @@ fly launch
 
 ## 📚 相关文档 / Related Documentation
 
-- [DOCKER_DEPLOYMENT_CN.md](DOCKER_DEPLOYMENT_CN.md) - **Docker 部署完整指南（路径映射、故障排查）**
-- [ENVIRONMENT_VARIABLES_CN.md](ENVIRONMENT_VARIABLES_CN.md) - 环境变量完整参考
+- [DOCKER_DEPLOYMENT.md](DOCKER_DEPLOYMENT.md) - **Docker 部署完整指南（路径映射、故障排查）**
+- [ENVIRONMENT_VARIABLES.md](ENVIRONMENT_VARIABLES.md) - 环境变量完整参考
 - [../docker/README.md](../docker/README.md) - Docker 详细使用说明
-- [../security/SECURITY_CN.md](../security/SECURITY_CN.md) - 安全最佳实践
-- [../security/AUTHENTICATION_CN.md](../security/AUTHENTICATION_CN.md) - 认证配置详解
-- [../README_CN.md](../README_CN.md) - 项目快速入门
-- [API_CN.md](API_CN.md) - REST API 参考
+- [../security/SECURITY.md](../security/SECURITY.md) - 安全最佳实践
+- [../security/AUTHENTICATION.md](../security/AUTHENTICATION.md) - 认证配置详解
+- [../README.md](../README.md) - 项目快速入门
+- [API.md](API.md) - REST API 参考
 
 ---
 

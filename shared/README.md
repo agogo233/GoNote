@@ -25,14 +25,9 @@ shared/
 │   ├── nord.css
 │   ├── vs-blue.css
 │   └── vue-high-contrast.css
-├── locales/          # Internationalization files
-│   ├── en-US.json    # English translations
-│   └── zh-CN.json    # Chinese translations
-
-└── assets/           # Project-owned assets
-    ├── css/          # Compiled CSS (Tailwind output)
-    ├── icons/        # Project icons (SVG, PNG)
-    └── images/       # Project images and graphics
+└── locales/          # Internationalization files
+    ├── en-US.json    # English translations
+    └── zh-CN.json    # Chinese translations
 ```
 
 ## Concepts
@@ -56,13 +51,6 @@ CSS themes provide alternative color schemes. The app dynamically loads theme fi
 ### Localization (`locales/`)
 JSON files containing translation strings. The app supports English (en-US) and Chinese (zh-CN) out of the box.
 
-
-### Assets (`assets/`)
-Project-owned static assets:
-- **css/**: Compiled Tailwind CSS output
-- **icons/**: Official GoNote logos and icons
-- **images/**: Marketing graphics, screenshots, and other images
-
 ## Static File Serving
 
 The Go backend serves static files from this directory under the `/static/` path:
@@ -70,8 +58,6 @@ The Go backend serves static files from this directory under the `/static/` path
 /static/frontend/    → shared/frontend/
 /static/themes/      → shared/themes/
 /static/locales/     → shared/locales/
-
-/static/assets/      → shared/assets/
 ```
 
 ## Adding New Resources

@@ -11,10 +11,10 @@
 - **笔记模板** — 从带动态占位符的模板快速创建笔记
 - **代码语法高亮** — 支持 50+ 种编程语言
 - **一键复制代码块** — 悬停时显示复制按钮
-- **LaTeX 数学公式渲染** — 使用 MathJax 渲染精美数学公式（详见 [MATHJAX_CN.md](MATHJAX_CN.md)）
-- **Mermaid 图表支持** — 创建流程图、时序图等（详见 [MERMAID_CN.md](MERMAID_CN.md)）
+- **LaTeX 数学公式渲染** — 使用 MathJax 渲染精美数学公式（详见 [MATHJAX.md](MATHJAX.md)）
+- **Mermaid 图表支持** — 创建流程图、时序图等（详见 [MERMAID.md](MERMAID.md)）
 - **HTML 导出** — 将笔记导出为带嵌入图片的独立 HTML 文件
-- **公开分享** — 通过令牌 URL 分享笔记，支持 QR 码方便移动端访问（详见 [SHARING_CN.md](SHARING_CN.md)）
+- **公开分享** — 通过令牌 URL 分享笔记，支持 QR 码方便移动端访问（详见 [SHARING.md](SHARING.md)）
 
 ---
 
@@ -139,7 +139,7 @@
 
 ## 🏷️ 标签 / Tags
 
-使用 YAML frontmatter 中的标签组织笔记。完整指南请参阅 **[TAGS_CN.md](TAGS_CN.md)**。
+使用 YAML frontmatter 中的标签组织笔记。完整指南请参阅 **[TAGS.md](TAGS.md)**。
 
 ### 快速开始
 
@@ -255,7 +255,7 @@ x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}
 $$
 ```
 
-📄 **更多示例和语法参考请参阅 [MATHJAX_CN.md](MATHJAX_CN.md)。**
+📄 **更多示例和语法参考请参阅 [MATHJAX.md](MATHJAX.md)。**
 
 ---
 
@@ -286,7 +286,7 @@ graph TD
 ```
 ````
 
-📄 **更多图表示例和语法参考请参阅 [MERMAID_CN.md](MERMAID_CN.md)。**
+📄 **更多图表示例和语法参考请参阅 [MERMAID.md](MERMAID.md)。**
 
 ---
 
@@ -354,7 +354,7 @@ date: {{date}}
 - **daily-journal** — 每日日志，含晨间目标和晚间反思
 - **project-plan** — 项目规划模板，包含目标和时间线
 
-📚 **详见 [TEMPLATES_CN.md](TEMPLATES_CN.md)** 获取详细文档和可复制到您实例的示例模板。
+📚 **详见 [TEMPLATES.md](TEMPLATES.md)** 获取详细文档和可复制到您实例的示例模板。
 
 ---
 

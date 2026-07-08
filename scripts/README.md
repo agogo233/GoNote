@@ -58,17 +58,10 @@ scripts/
 ├── cleanup.sh             # Temp/cache cleaner
 ├── migrate.sh             # Migration tool
 ├── backups/               # Backup archive storage (created automatically)
-├── data/                  # Example data structure (for reference only)
-│   ├── cache/
-│   ├── notes/
-│   └── temp/
-└── go/                    # Empty template directories (reference only)
-    └── internal/
-        ├── config/
-        ├── handlers/
-        ├── middleware/
-        ├── models/
-        └── services/
+└── data/                  # Example data structure (for reference only)
+    ├── cache/
+    ├── notes/
+    └── temp/
 ```
 
 ## Environment
@@ -76,8 +69,6 @@ scripts/
 All scripts assume they are run from the **project root directory**.
 
 The `data/` subdirectory in this script directory is **not used** at runtime; it shows the expected directory structure for reference only.
-
-The `go/internal/` subdirectory contains **empty placeholder directories** to illustrate the expected Go project layout. These are not used by the scripts.
 
 ## Important Notes
 

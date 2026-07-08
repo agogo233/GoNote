@@ -201,13 +201,12 @@ GoNote supports multiple languages and welcomes translation contributions!
 **Adding translations:**
 
 1. **For user-facing documentation** (in `project-docs/user-guide/`):
-   - Each `.md` file has a corresponding `_CN.md` Chinese version
+   - Documentation files are in Simplified Chinese (zh-CN)
    - Follow the same structure and formatting
-   - Maintain the original meaning, not word-for-word translation
    - Keep technical terms consistent across documents
 
 2. **For developer documentation** (in `project-docs/developer-guide/`):
-   - You can create `_CN.md` versions for missing docs
+   - Documentation files are in Simplified Chinese (zh-CN)
    - Check `project-docs/README.md` for current status
 
 3. **For UI translations** (locale files):
@@ -283,8 +282,8 @@ When updating documentation:
 # Build the Go binary
 make build
 
-# The binary will be at ./gonote
-./gonote --config go/config.yaml
+# The binary will be at ./bin/gonote
+./bin/gonote --config go/config.yaml
 ```
 
 ### Frontend Development
