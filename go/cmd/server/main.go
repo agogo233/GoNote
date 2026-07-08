@@ -116,10 +116,26 @@ func main() {
 	// recover 必须放在最前：捕获后续所有中间件/handler 的 panic，避免连接异常断开
 	app.Use(fiberrecover.New())
 
-	app.Use(compress.New(compress.Config{
+app.Use(compress.New(compress.Config{
 		Level: compress.LevelBestSpeed,
 	}))
-	
+
+	// 安全响应头
+	app.Use(func(c *fiber.Ctx) error {
+		c.Set("Content-Security-Policy",
+			"default-src 'self'; "+
+				"script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; "+
+				"style-src 'self' 'unsafe-inline'; "+
+				"img-src 'self' data: https:; "+
+				"media-src 'self' data:; "+
+				"frame-src 'none'; object-src 'none'; base-uri 'self'")
+		c.Set("X-Content-Type-Options", "nosniff")
+		c.Set("X-Frame-Options", "DENY")
+		c.Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		c.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+		return c.Next()
+	})
+
 	// HTTP request logger (respects log.enabled config)
 	if cfg.Log.Enabled {
 		app.Use(logger.New(logger.Config{
@@ -162,6 +178,16 @@ func main() {
 		applogger.Infof("\nShutting down gracefully...")
 		noteService.StopBackgroundScanner() // Stop background scanner
 		noteService.StopCacheCleanup()      // Stop cache cleanup goroutine
+
+		// 等待后台 goroutine 完成（10s 超时）
+		done := make(chan struct{})
+		go noteService.WaitBackground(done)
+		select {
+		case <-done:
+		case <-time.After(10 * time.Second):
+			applogger.Printf("Warning: background goroutines did not finish within timeout")
+		}
+
 		wsManager.Stop()      // Stop WebSocket manager and close all connections
 		if err := app.Shutdown(); err != nil {
 			applogger.Printf("Shutdown error: %v", err)
@@ -236,7 +262,9 @@ func setupRoutes(app *fiber.App, cfg *config.Config) (*services.NoteService, *ha
 
 	// Build search index asynchronously on startup
 	if cfg.Search.Enabled {
+		noteService.WaitGroup().Add(1)
 		go func() {
+			defer noteService.WaitGroup().Done()
 			defer func() {
 				if r := recover(); r != nil {
 					applogger.Printf("Search index build goroutine panic recovered: %v", r)

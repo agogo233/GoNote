@@ -18,6 +18,9 @@ import (
 type ShareService struct {
 	notesDir string
 	mu       sync.RWMutex
+	cacheMu  sync.RWMutex
+	tokens   map[string]models.ShareToken
+	dirty    bool
 }
 
 // NewShareService creates a new ShareService
@@ -46,12 +49,27 @@ func (s *ShareService) getTokensFilePath() string {
 // error so the service stays usable, instead of silently wiping the tokens
 // (or fataling the startup).
 func (s *ShareService) loadTokens() (map[string]models.ShareToken, error) {
+	s.cacheMu.RLock()
+	if s.tokens != nil {
+		cached := s.tokens
+		s.cacheMu.RUnlock()
+		return cached, nil
+	}
+	s.cacheMu.RUnlock()
+
+	s.cacheMu.Lock()
+	defer s.cacheMu.Unlock()
+	if s.tokens != nil {
+		return s.tokens, nil
+	}
+
 	tokensFile := s.getTokensFilePath()
 
 	data, err := os.ReadFile(tokensFile)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return make(map[string]models.ShareToken), nil
+			s.tokens = make(map[string]models.ShareToken)
+			return s.tokens, nil
 		}
 		return nil, err
 	}
@@ -67,7 +85,8 @@ func (s *ShareService) loadTokens() (map[string]models.ShareToken, error) {
 		} else {
 			logger.Errorf("[share] tokens file corrupt, backed up to %s (error: %v)", backup, err)
 		}
-		return make(map[string]models.ShareToken), nil
+		s.tokens = make(map[string]models.ShareToken)
+		return s.tokens, nil
 	}
 
 	// Filter out expired tokens in-memory. Persistence cleanup happens lazily
@@ -88,12 +107,14 @@ func (s *ShareService) loadTokens() (map[string]models.ShareToken, error) {
 		}
 	}
 
+	s.tokens = tokens
 	return tokens, nil
 }
-
-// saveTokens saves share tokens to file atomically so a crash mid-write
-// cannot leave a half-written token file.
 func (s *ShareService) saveTokens(tokens map[string]models.ShareToken) error {
+	s.cacheMu.Lock()
+	s.tokens = tokens
+	s.cacheMu.Unlock()
+
 	tokensFile := s.getTokensFilePath()
 
 	data, err := json.MarshalIndent(tokens, "", "  ")

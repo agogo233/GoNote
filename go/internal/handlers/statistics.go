@@ -22,9 +22,9 @@ func NewStatisticsHandler(service *services.StatisticsService, cfg *config.Confi
 
 // GetStatistics returns statistics for a note
 func (h *StatisticsHandler) GetStatistics(c *fiber.Ctx) error {
-	notePath, ok := resolvePathParamTrimmed(c, h.config.Storage.NotesDir)
-	if !ok {
-		return nil
+	notePath, err := resolvePathParamTrimmed(c, h.config.Storage.NotesDir)
+	if err != nil {
+		return err
 	}
 
 	// Calculate statistics

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -46,6 +47,8 @@ type NoteService struct {
 	pathMu         sync.Map       // path → *sync.Mutex（per-path 写入串行锁）
 	triggerMu      sync.Mutex
 	triggerTimer   *time.Timer
+	scanMu         sync.Mutex
+	wg             sync.WaitGroup
 }
 
 type scanCacheEntry struct {
@@ -496,7 +499,7 @@ func (s *NoteService) SaveNoteWithCheck(notePath, content, knownMtime string) er
 	return nil
 }
 
-// DeleteNote deletes a note
+// DeleteNote deletes a note (soft delete: moves to .trash)
 func (s *NoteService) DeleteNote(notePath string) error {
 	fullPath := filepath.Join(s.notesDir, notePath)
 
@@ -508,14 +511,24 @@ func (s *NoteService) DeleteNote(notePath string) error {
 		return fmt.Errorf("note not found")
 	}
 
+	// Soft delete: move to .trash
+	trashDir := filepath.Join(s.notesDir, ".trash")
+	if err := os.MkdirAll(trashDir, 0755); err != nil {
+		return fmt.Errorf("failed to create trash dir: %w", err)
+	}
+
+	trashName := strings.ReplaceAll(notePath, "/", "__") + "." + strconv.FormatInt(time.Now().Unix(), 10)
+	trashPath := filepath.Join(trashDir, trashName)
+
+	if err := os.Rename(fullPath, trashPath); err != nil {
+		return fmt.Errorf("failed to move to trash: %w", err)
+	}
+
 	// Fine-grained cache invalidation
 	s.invalidateNoteCache(notePath)
+	s.pathMu.Delete(notePath)
 
-	err := os.Remove(fullPath)
-	if err == nil {
-		s.pathMu.Delete(notePath)
-	}
-	return err
+	return nil
 }
 
 // MoveNote moves a note to a new location and updates all wikilink references
@@ -747,6 +760,11 @@ func (s *NoteService) InvalidateCache() {
 	s.tagCache.Clear()
 }
 
+func (s *NoteService) InvalidateNoteCache(notePath string) {
+	cacheKey := cachePrefixContent + ToPosixPath(notePath)
+	s.cache.Delete(cacheKey)
+}
+
 func (s *NoteService) GetTagsCached(filePath string) []string {
 	info, err := os.Stat(filePath)
 	if err != nil {
@@ -881,7 +899,10 @@ func (s *NoteService) TriggerScan() {
 		s.triggerTimer.Stop()
 	}
 	s.triggerTimer = time.AfterFunc(200*time.Millisecond, func() {
-		s.performScan()
+		select {
+		case s.scanTrigger <- struct{}{}:
+		default:
+		}
 	})
 }
 
@@ -901,6 +922,9 @@ func (s *NoteService) IsScannerReady() bool {
 
 // performScan executes the actual scan and updates cache
 func (s *NoteService) performScan() {
+	s.scanMu.Lock()
+	defer s.scanMu.Unlock()
+
 	// 单次 WalkDir 同时获取含媒体与不含媒体的两份笔记列表，避免重复遍历
 	allNotes, notesOnly, folders := s.doScanBoth()
 
@@ -913,7 +937,11 @@ func (s *NoteService) performScan() {
 
 	// 重建链接索引（全量，在后台 goroutine 中异步执行，避免阻塞扫描流程）
 	if s.linkIndex != nil {
-		go s.linkIndex.RebuildFull()
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			s.linkIndex.RebuildFull()
+		}()
 	}
 
 	if s.onScanComplete != nil {
@@ -1009,5 +1037,54 @@ func (s *NoteService) IsReady() bool {
 func (s *NoteService) ClearCache() {
 	s.cache.Clear()
 	s.tagCache.Clear()
+}
+
+func (s *NoteService) ListTrashNotes() ([]string, error) {
+	trashDir := filepath.Join(s.notesDir, ".trash")
+	entries, err := os.ReadDir(trashDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var notes []string
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".md") {
+			notes = append(notes, e.Name())
+		}
+	}
+	return notes, nil
+}
+
+func (s *NoteService) RestoreNote(trashName string) (string, error) {
+	trashDir := filepath.Join(s.notesDir, ".trash")
+	trashPath := filepath.Join(trashDir, trashName)
+
+	lastDot := strings.LastIndex(trashName, ".")
+	if lastDot < 0 {
+		return "", fmt.Errorf("invalid trash name: %s", trashName)
+	}
+	originalPath := strings.ReplaceAll(trashName[:lastDot], "__", "/")
+
+	fullPath := filepath.Join(s.notesDir, originalPath)
+	if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
+		return "", fmt.Errorf("failed to create parent dir: %w", err)
+	}
+
+	if err := os.Rename(trashPath, fullPath); err != nil {
+		return "", fmt.Errorf("failed to restore: %w", err)
+	}
+
+	return originalPath, nil
+}
+
+func (s *NoteService) WaitGroup() *sync.WaitGroup {
+	return &s.wg
+}
+
+func (s *NoteService) WaitBackground(done chan struct{}) {
+	s.wg.Wait()
+	close(done)
 }
 

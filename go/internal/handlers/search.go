@@ -67,18 +67,12 @@ func (h *SearchHandler) Search(c *fiber.Ctx) error {
 		return fiber.NewError(500, err.Error())
 	}
 
-	// Check if pagination parameters are explicitly provided
-	hasPageParam := c.Query("page") != ""
-	hasLimitParam := c.Query("limit") != ""
-
-	if hasPageParam || hasLimitParam {
-		// Pagination requested, return paginated response
-		paginatedResult := services.PaginateSearchResults(results, page, limit)
-		return c.JSON(models.SearchResultsResponse(paginatedResult))
-	} else {
-		// No pagination requested, return just results array for backward compatibility
-		return c.JSON(fiber.Map{"results": results})
+	// Always use pagination
+	if limit <= 0 || limit > 200 {
+		limit = 200
 	}
+	paginatedResult := services.PaginateSearchResults(results, page, limit)
+	return c.JSON(models.SearchResultsResponse(paginatedResult))
 }
 
 func (h *SearchHandler) RegisterRoutes(api fiber.Router) {

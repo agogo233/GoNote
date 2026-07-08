@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 	"mime/multipart"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -41,6 +42,29 @@ func (h *MediaHandler) validateUpload(file *multipart.FileHeader) error {
 		contentType := file.Header.Get("Content-Type")
 		if !h.isAllowedType(contentType) {
 			return fmt.Errorf("file type not allowed: %s", contentType)
+		}
+	}
+
+	// Magic bytes 验证（同样受 AllowedTypes 配置控制）
+	if len(h.config.Upload.AllowedTypes) > 0 {
+		f, err := file.Open()
+		if err == nil {
+			defer f.Close()
+			buf := make([]byte, 512)
+			n, _ := f.Read(buf)
+			if n > 0 {
+				detectedType := http.DetectContentType(buf)
+				allowedMIME := map[string]bool{
+					"image/jpeg": true, "image/png": true, "image/gif": true,
+					"image/webp": true, "image/svg+xml": false,
+					"audio/mpeg": true, "audio/ogg": true, "audio/wav": true,
+					"video/mp4": true, "video/webm": true,
+					"application/pdf": true,
+				}
+				if !allowedMIME[detectedType] {
+					return fiber.NewError(fiber.StatusBadRequest, "File type not allowed")
+				}
+			}
 		}
 	}
 

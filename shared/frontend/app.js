@@ -704,8 +704,23 @@ function noteApp() {
             window.__noteapp_initialized = true;
             
             try {
-                // Store global reference for native event handlers in x-html content
-                window.$root = this;
+                // Expose minimal whitelist for native event handlers in x-html content
+                window.__app = {
+                    showAlert: this.showAlert.bind(this),
+                    showConfirm: this.showConfirm.bind(this),
+                    t: this.t.bind(this),
+                    openQuickSwitcher: this.openQuickSwitcher.bind(this),
+                    toggleFolder: this.toggleFolder.bind(this),
+                    onItemDragStart: this.onItemDragStart.bind(this),
+                    onItemDragEnd: this.onItemDragEnd.bind(this),
+                    handleFolderDragOver: this.handleFolderDragOver.bind(this),
+                    handleFolderDragLeave: this.handleFolderDragLeave.bind(this),
+                    handleFolderDrop: this.handleFolderDrop.bind(this),
+                    handleFolderClick: this.handleFolderClick.bind(this),
+                    handleItemClick: this.handleItemClick.bind(this),
+                    handleItemHover: this.handleItemHover.bind(this),
+                    loadMoreFolderNotes: this.loadMoreFolderNotes.bind(this),
+                };
                 // Expose modal helpers for ErrorHandler and x-html event handlers
                 window.showAppAlert = this.showAlert.bind(this);
                 
@@ -715,6 +730,19 @@ function noteApp() {
                         this.cancelDrag();
                     }
                 });
+
+                // Event delegation for destructive operations in x-html templates
+                document.addEventListener('click', (e) => {
+                    const btn = e.target.closest('[data-action]');
+                    if (!btn) return;
+                    e.stopPropagation();
+                    switch (btn.dataset.action) {
+                        case 'new-item': this.handleNewItemClick(btn, e); break;
+                        case 'rename-folder': this.handleRenameFolderClick(btn, e); break;
+                        case 'delete-folder': this.handleDeleteFolderClick(btn, e); break;
+                        case 'delete-item': this.handleDeleteItemClick(btn, e); break;
+                    }
+                }, true);
                 
                 await this.loadConfig();
                 await this.loadThemes();
@@ -1017,8 +1045,10 @@ function noteApp() {
         
         // Load available themes from backend
         async loadThemes() {
+            this._themesController?.abort();
+            this._themesController = new AbortController();
             try {
-                const response = await fetch('/api/themes');
+                const response = await fetch('/api/themes', { signal: this._themesController.signal });
                 const data = await response.json();
                 
                 // Use theme names directly from backend (already include emojis)
@@ -1612,8 +1642,10 @@ function noteApp() {
         
         // Load available templates from _templates folder
         async loadTemplates() {
+            this._templatesController?.abort();
+            this._templatesController = new AbortController();
             try {
-                const response = await fetch('/api/templates');
+                const response = await fetch('/api/templates', { signal: this._templatesController.signal });
                 const data = await response.json();
                 this.modals.template.available = data.templates || [];
             } catch (error) {
@@ -1900,11 +1932,13 @@ function noteApp() {
             
             // Case 3: Text search (with or without tag filter)
             if (hasTextSearch) {
+                this._searchController?.abort();
+                this._searchController = new AbortController();
                 this.search.isSearching = true;
                 try {
                     // Use pagination parameters from state, pass search mode
                     const url = `/api/search?q=${encodeURIComponent(this.search.query)}&mode=${encodeURIComponent(this.search.mode)}&page=${this.search.page}&limit=${this.search.limit}`;
-                    const response = await fetch(url);
+                    const response = await fetch(url, { signal: this._searchController.signal });
                     const data = await response.json();
                     
                     // Handle both old format (direct array) and new format (with pagination)
@@ -2318,13 +2352,13 @@ function noteApp() {
                         data-path="${esc(folder.path)}"
                         data-name="${esc(folder.name)}"
                         draggable="true"
-                        ondragstart="window.$root.onItemDragStart(this.dataset.path, 'folder', event)"
-                        ondragend="window.$root.onItemDragEnd()"
-                        ondragover="window.$root.handleFolderDragOver(this, event)"
-                        ondragenter="window.$root.handleFolderDragOver(this, event)"
-                        ondragleave="window.$root.handleFolderDragLeave(this)"
-                        ondrop="window.$root.handleFolderDrop(this, event)"
-                        onclick="window.$root.handleFolderClick(this)"
+                        ondragstart="window.__app.onItemDragStart(this.dataset.path, 'folder', event)"
+                        ondragend="window.__app.onItemDragEnd()"
+                        ondragover="window.__app.handleFolderDragOver(this, event)"
+                        ondragenter="window.__app.handleFolderDragOver(this, event)"
+                        ondragleave="window.__app.handleFolderDragLeave(this)"
+                        ondrop="window.__app.handleFolderDrop(this, event)"
+                        onclick="window.__app.handleFolderClick(this)"
                         class="folder-item hover-accent px-2 py-1 text-sm relative"
                         style="color: var(--text-primary); cursor: pointer;"
                     >
@@ -2344,24 +2378,24 @@ function noteApp() {
                         </div>
                         <div class="hover-buttons flex gap-1 transition-opacity absolute right-2 top-1/2 transform -translate-y-1/2" style="opacity: 0; pointer-events: none; background: linear-gradient(to right, transparent, var(--bg-hover) 20%, var(--bg-hover)); padding-left: 20px;" onclick="event.stopPropagation()">
                             <button 
+                                data-action="new-item"
                                 data-path="${esc(folder.path)}"
-                                onclick="window.$root.handleNewItemClick(this, event)"
                                 class="px-1.5 py-0.5 text-xs rounded hover:brightness-110"
                                 style="background-color: var(--bg-tertiary); color: var(--text-secondary);"
                                 title="${this.t('folders.add_item')}"
                             >+</button>
                             <button 
+                                data-action="rename-folder"
                                 data-path="${esc(folder.path)}"
                                 data-name="${esc(folder.name)}"
-                                onclick="window.$root.handleRenameFolderClick(this, event)"
                                 class="px-1.5 py-0.5 text-xs rounded hover:brightness-110"
                                 style="background-color: var(--bg-tertiary); color: var(--text-secondary);"
                                 title="${this.t('folders.rename')}"
                             >✏️</button>
                             <button 
+                                data-action="delete-folder"
                                 data-path="${esc(folder.path)}"
                                 data-name="${esc(folder.name)}"
-                                onclick="window.$root.handleDeleteFolderClick(this, event)"
                                 class="px-1 py-0.5 text-xs rounded hover:brightness-110"
                                 style="color: var(--error);"
                                 title="${this.t('folders.delete')}"
@@ -2400,7 +2434,7 @@ function noteApp() {
                     });
                     if (totalNotes > maxNotes) {
                         const remaining = totalNotes - maxNotes;
-                        html += `<div class="px-2 py-1 text-xs" style="color: var(--text-tertiary); cursor: pointer;" onclick="window.$root.loadMoreFolderNotes('${esc(folder.path)}')">${this.t('notes.show_more', {count: remaining})}</div>`;
+                        html += `<div class="px-2 py-1 text-xs" style="color: var(--text-tertiary); cursor: pointer;" onclick="window.__app.loadMoreFolderNotes('${esc(folder.path)}')">${this.t('notes.show_more', {count: remaining})}</div>`;
                     }
                 }
                 
@@ -2453,20 +2487,20 @@ function noteApp() {
                     data-name="${esc(decodedName)}"
                     data-type="${note.type}"
                     draggable="true"
-                    ondragstart="window.$root.onItemDragStart(this.dataset.path, this.dataset.type || 'note', event)"
-                    ondragend="window.$root.onItemDragEnd()"
-                    onclick="window.$root.handleItemClick(this)"
+                    ondragstart="window.__app.onItemDragStart(this.dataset.path, this.dataset.type || 'note', event)"
+                    ondragend="window.__app.onItemDragEnd()"
+                    onclick="window.__app.handleItemClick(this)"
                     class="note-item px-2 py-1 text-sm relative"
                     style="${isCurrent ? 'background-color: var(--accent-light); color: var(--accent-primary);' : 'color: var(--text-primary);'} ${isMediaFile ? 'opacity: 0.85;' : ''} cursor: pointer;"
-                    onmouseover="window.$root.handleItemHover(this, true)"
-                    onmouseout="window.$root.handleItemHover(this, false)"
+                    onmouseover="window.__app.handleItemHover(this, true)"
+                    onmouseout="window.__app.handleItemHover(this, false)"
                 >
                     <span class="truncate" style="display: block; padding-right: 30px;" title="${esc(decodedName)}">${shareIcon}${icon}${icon ? ' ' : ''}${esc(decodedName)}</span>
                     <button
+                        data-action="delete-item"
                         data-path="${esc(note.path)}"
                         data-name="${esc(decodedName)}"
                         data-type="${note.type}"
-                        onclick="window.$root.handleDeleteItemClick(this, event)"
                         class="note-delete-btn absolute right-2 top-1/2 transform -translate-y-1/2 px-1 py-0.5 text-xs rounded hover:brightness-110 transition-opacity"
                         style="opacity: 0; color: var(--error);"
                         title="${isMediaFile ? this.t('sidebar.delete_file') : this.t('sidebar.delete_note')}"
@@ -3410,6 +3444,8 @@ function noteApp() {
         
         // Load a specific note
         async loadNote(notePath, updateHistory = true, searchQuery = '', lineNumber = 0) {
+            this._loadNoteController?.abort();
+            this._loadNoteController = new AbortController();
             try {
                 // Save scroll position of current note before switching
                 if (this.note.current && this.note.current !== notePath) {
@@ -3420,7 +3456,7 @@ function noteApp() {
                 this.ui.mobileSidebarOpen = false;
                 
                 const encodedPath = notePath.split('/').map(segment => encodeURIComponent(segment)).join('/');
-                const response = await fetch(`/api/notes/${encodedPath}`);
+                const response = await fetch(`/api/notes/${encodedPath}`, { signal: this._loadNoteController.signal });
                 
                 // Check if note exists
                 if (!response.ok) {
@@ -5553,7 +5589,6 @@ function noteApp() {
             // Parse as DOM to safely manipulate (DOMPurify sanitizes marked output to prevent XSS)
             const tempDiv = document.createElement('div');
             tempDiv.innerHTML = DOMPurify.sanitize(html, {
-                ADD_TAGS: ['iframe'],
                 ADD_ATTR: ['target', 'rel', 'controls', 'preload', 'poster', 'allowfullscreen']
             });
             

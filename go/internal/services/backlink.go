@@ -229,7 +229,7 @@ func (s *BacklinkService) UpdateWikilinks(sourcePath, oldLinkText, newLinkText s
 		return nil // No changes
 	}
 
-	return os.WriteFile(fullPath, []byte(updated), 0644)
+	return AtomicWrite(fullPath, []byte(updated), 0644)
 }
 
 // replaceWikilink replaces wikilink references in content
@@ -370,7 +370,7 @@ func (s *BacklinkService) UpdateFolderBacklinks(oldFolderPath, newFolderPath str
 
 		// If content changed, write back
 		if updated != contentStr {
-			if err := os.WriteFile(path, []byte(updated), 0644); err == nil {
+			if err := AtomicWrite(path, []byte(updated), 0644); err == nil {
 				updatedCount++
 			}
 		}

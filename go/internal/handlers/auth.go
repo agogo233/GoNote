@@ -9,6 +9,7 @@ import (
 
 	"gonote/internal/models"
 	"gonote/internal/models/config"
+	applogger "gonote/internal/models/logger"
 	"gonote/internal/middleware"
 )
 
@@ -143,6 +144,7 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 		[]byte(req.Password),
 	)
 	if err != nil {
+		applogger.Printf("Login failed from IP: %s", c.IP())
 		return c.Status(401).JSON(models.APIResponse{Success: false, Message: "Invalid password"})
 	}
 

@@ -21,18 +21,16 @@ func resolvePathParam(c *fiber.Ctx, notesDir string) (string, bool) {
 	return decoded, true
 }
 
-func resolvePathParamTrimmed(c *fiber.Ctx, notesDir string) (string, bool) {
+func resolvePathParamTrimmed(c *fiber.Ctx, notesDir string) (string, error) {
 	path := strings.TrimPrefix(c.Params("*"), "/")
 	decoded, err := url.PathUnescape(path)
 	if err != nil {
-		c.Status(400).JSON(fiber.Map{"detail": "Invalid path encoding"})
-		return "", false
+		return "", fiber.NewError(fiber.StatusBadRequest, "Invalid path encoding")
 	}
 	if !services.ValidatePathSecurity(notesDir, decoded) {
-		c.Status(400).JSON(fiber.Map{"detail": "Invalid path"})
-		return "", false
+		return "", fiber.NewError(fiber.StatusBadRequest, "Invalid path")
 	}
-	return decoded, true
+	return decoded, nil
 }
 
 func validatePath(c *fiber.Ctx, notesDir, path string) bool {

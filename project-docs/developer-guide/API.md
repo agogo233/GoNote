@@ -816,6 +816,8 @@ GET /api/tags/{tag_name}
       "name": "python-basics",
       "folder": "tutorials",
       "title": "Python 基础",
+      "size": 1234,
+      "type": "md",
       "tags": ["python", "tutorial", "basics"],
       "modified": "2025-01-14T10:00:00+08:00"
     }

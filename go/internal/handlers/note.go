@@ -63,9 +63,9 @@ func (h *NoteHandler) List(c *fiber.Ctx) error {
 
 // Get returns a single note or creates a new one
 func (h *NoteHandler) Get(c *fiber.Ctx) error {
-	notePath, ok := resolvePathParamTrimmed(c, h.config.Storage.NotesDir)
-	if !ok {
-		return nil
+	notePath, err := resolvePathParamTrimmed(c, h.config.Storage.NotesDir)
+	if err != nil {
+		return err
 	}
 
 	// Check if note exists
@@ -97,9 +97,9 @@ func (h *NoteHandler) Get(c *fiber.Ctx) error {
 
 // CreateOrUpdate creates or updates a note
 func (h *NoteHandler) CreateOrUpdate(c *fiber.Ctx) error {
-	notePath, ok := resolvePathParamTrimmed(c, h.config.Storage.NotesDir)
-	if !ok {
-		return nil
+	notePath, err := resolvePathParamTrimmed(c, h.config.Storage.NotesDir)
+	if err != nil {
+		return err
 	}
 
 	// Handle /notes/move specially - redirect to Move handler
@@ -117,7 +117,7 @@ func (h *NoteHandler) CreateOrUpdate(c *fiber.Ctx) error {
 	}
 
 	// Save note with optional mtime-based optimistic lock
-	err := h.service.SaveNoteWithCheck(notePath, req.Content, req.Modified)
+	err = h.service.SaveNoteWithCheck(notePath, req.Content, req.Modified)
 	if err != nil {
 		if errors.Is(err, services.ErrConflict) {
 			fullPath := filepath.Join(h.config.Storage.NotesDir, notePath)
@@ -162,9 +162,9 @@ func (h *NoteHandler) CreateOrUpdate(c *fiber.Ctx) error {
 
 // Delete deletes a note
 func (h *NoteHandler) Delete(c *fiber.Ctx) error {
-	notePath, ok := resolvePathParamTrimmed(c, h.config.Storage.NotesDir)
-	if !ok {
-		return nil
+	notePath, err := resolvePathParamTrimmed(c, h.config.Storage.NotesDir)
+	if err != nil {
+		return err
 	}
 
 	if err := h.service.DeleteNote(notePath); err != nil {
@@ -252,9 +252,9 @@ func (h *NoteHandler) GetNotesDir() string {
 }
 
 func (h *NoteHandler) GetAttachments(c *fiber.Ctx) error {
-	notePath, ok := resolvePathParamTrimmed(c, h.config.Storage.NotesDir)
-	if !ok {
-		return nil
+	notePath, err := resolvePathParamTrimmed(c, h.config.Storage.NotesDir)
+	if err != nil {
+		return err
 	}
 
 	attachments, err := h.service.GetAttachments(notePath)
@@ -269,8 +269,41 @@ func (h *NoteHandler) GetAttachments(c *fiber.Ctx) error {
 	})
 }
 
+func (h *NoteHandler) ListTrashNotes(c *fiber.Ctx) error {
+	notes, err := h.service.ListTrashNotes()
+	if err != nil {
+		return fiber.NewError(500, err.Error())
+	}
+	return c.JSON(fiber.Map{
+		"success": true,
+		"notes":   notes,
+	})
+}
+
+func (h *NoteHandler) RestoreNote(c *fiber.Ctx) error {
+	var req struct {
+		TrashName string `json:"trashName"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(400).JSON(fiber.Map{"detail": "Invalid request body"})
+	}
+
+	originalPath, err := h.service.RestoreNote(req.TrashName)
+	if err != nil {
+		return fiber.NewError(500, err.Error())
+	}
+
+	return c.JSON(models.APIResponse{
+		Success: true,
+		Message: "Note restored successfully",
+		Data:    fiber.Map{"path": originalPath},
+	})
+}
+
 func (h *NoteHandler) RegisterRoutes(api fiber.Router) {
 	api.Get("/notes", h.List)
+	api.Get("/notes/trash", h.ListTrashNotes)
+	api.Post("/notes/trash/restore", h.RestoreNote)
 	api.Post("/notes/move", middleware.EndpointLimiterSimple(30), h.Move)
 	api.Get("/notes/attachments/*", h.GetAttachments)
 	api.Get("/notes/*", h.Get)

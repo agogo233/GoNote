@@ -99,15 +99,7 @@ func (s *ExportService) GenerateExportHTML(title, content, themeCSS string, isDa
 		mermaidTheme = "dark"
 	}
 
-	// Read library files and inline them for fully self-contained export
-	highlightJs := s.readLibFile("highlight.js/11.11.1/highlight.min.js")
-	highlightThemeCss := s.readLibFile("highlight.js/11.11.1/styles/" + highlightTheme + ".min.css")
-	mathJaxJs := s.readLibFile("mathjax/3.2.2/es5/tex-mml-chtml.js")
-	mermaidJs := s.readLibFile("mermaid/11.12.2/dist/mermaid.min.js")
-	dompurifyJs := s.readLibFile("dompurify/3.2.4/purify.min.js")
-
 	// Build HTML template using string concatenation to avoid backtick issues
-	// Inline all library code for fully self-contained export (works offline, on any device)
 	html := `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -115,17 +107,17 @@ func (s *ExportService) GenerateExportHTML(title, content, themeCSS string, isDa
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>` + html.EscapeString(title) + `</title>
 
-    <!-- Highlight.js for code syntax highlighting (inline) -->
-    <style>` + highlightThemeCss + `</style>
-    <script>` + highlightJs + `<` + `/script>
+    <!-- Highlight.js for code syntax highlighting -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/` + highlightTheme + `.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1"></script>
 
-    <!-- Marked.js for markdown parsing (inline) -->
-    <script>` + s.readLibFile("marked/12.0.2/marked.min.js") + `<` + `/script>
+    <!-- Marked.js for markdown parsing -->
+    <script src="https://cdn.jsdelivr.net/npm/marked@15/lib/marked.umd.min.js"></script>
 
-    <!-- DOMPurify for XSS sanitization (inline) -->
-    <script>` + dompurifyJs + `<` + `/script>
+    <!-- DOMPurify for XSS sanitization -->
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.4/dist/purify.min.js"></script>
 
-    <!-- MathJax for LaTeX math rendering (inline) -->
+    <!-- MathJax for LaTeX math rendering -->
     <script>
         MathJax = {
             tex: {
@@ -148,10 +140,10 @@ func (s *ExportService) GenerateExportHTML(title, content, themeCSS string, isDa
             }
         };
     </script>
-    <script>` + mathJaxJs + `<` + `/script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 
-    <!-- Mermaid.js for diagrams (inline) -->
-    <script>` + mermaidJs + `<` + `/script>
+    <!-- Mermaid.js for diagrams -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
     <script>
         mermaid.initialize({
             startOnLoad: false,

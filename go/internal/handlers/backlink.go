@@ -24,9 +24,9 @@ func NewBacklinkHandler(cfg *config.Config, linkIndex *services.LinkIndex) *Back
 
 // GetBacklinks returns backlinks for a note
 func (h *BacklinkHandler) GetBacklinks(c *fiber.Ctx) error {
-	notePath, ok := resolvePathParamTrimmed(c, h.config.Storage.NotesDir)
-	if !ok {
-		return nil
+	notePath, err := resolvePathParamTrimmed(c, h.config.Storage.NotesDir)
+	if err != nil {
+		return err
 	}
 
 	backlinks, err := h.backlinkService.FindBacklinks(notePath)

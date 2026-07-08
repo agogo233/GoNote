@@ -2,6 +2,7 @@ package services
 
 import (
 	"container/list"
+	"html"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -152,7 +153,6 @@ func (si *SearchIndex) ensureTitleTermsSorted() {
 
 // prepareSortedTerms 在查询入口前调用：若 dirty 则持写锁重建一次再释放。
 // 避免在 RLock 内读取 sortedTerms 时被并发写者改动导致越界/dirty 误判。
-// 调用方需自行重新 RLock；写者之后仍可再标 dirty，本次查询用 snapshot 即可一致。
 func (si *SearchIndex) prepareSortedTerms() {
 	if si.termsSortedDirty.Load() || si.titleSortedDirty.Load() {
 		si.mu.Lock()
@@ -302,6 +302,8 @@ func (si *SearchIndex) UpdateIndex(notePath string) error {
 
 	si.removeNoteFromIndex(notePath)
 	si.indexNoteFresh(notePath, terms, titleTerms, fileNameTerms, title)
+
+	si.noteService.InvalidateNoteCache(notePath)
 	return nil
 }
 
@@ -404,6 +406,7 @@ func (si *SearchIndex) removeNoteFromIndexFullScan(notePath string) {
 // CJK and non-CJK queries use the same unified path: tokenize → prefix match → verify
 func (si *SearchIndex) Search(query string) ([]models.SearchResult, error) {
 	si.prepareSortedTerms()
+
 	si.mu.RLock()
 	defer si.mu.RUnlock()
 
@@ -514,6 +517,10 @@ func (si *SearchIndex) findNotesWithPrefix(prefix string) map[string]bool {
 			break // 离开前缀区间
 		}
 		entries := si.index[term]
+		if entries == nil {
+			i++
+			continue
+		}
 		for e := entries.Front(); e != nil; e = e.Next() {
 			notes[e.Value.(IndexEntry).NotePath] = true
 		}
@@ -533,7 +540,12 @@ func (si *SearchIndex) noteContainsTermsWithPrefix(notePath string, terms []stri
 			if !strings.HasPrefix(indexed, term) {
 				break
 			}
-			for e := si.index[indexed].Front(); e != nil; e = e.Next() {
+			entries := si.index[indexed]
+			if entries == nil {
+				i++
+				continue
+			}
+			for e := entries.Front(); e != nil; e = e.Next() {
 				if e.Value.(IndexEntry).NotePath == notePath {
 					hit = true
 					break
@@ -1164,9 +1176,9 @@ func (si *SearchIndex) buildSearchResult(notePath string, content string, query 
 // highlightTerms wraps all occurrences of each term in the text with <mark> tags
 func (si *SearchIndex) highlightTerms(text string, terms []string) string {
 	if len(terms) == 0 {
-		return text
+		return html.EscapeString(text)
 	}
-	result := text
+	result := html.EscapeString(text)
 	for _, term := range terms {
 		re, err := si.getOrCompileRegex("(?i)" + regexp.QuoteMeta(term))
 		if err == nil {
