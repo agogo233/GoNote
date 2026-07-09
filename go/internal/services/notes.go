@@ -1067,6 +1067,11 @@ func (s *NoteService) RestoreNote(trashName string) (string, error) {
 	}
 	originalPath := strings.ReplaceAll(trashName[:lastDot], "__", "/")
 
+	// 路径安全校验，防止恶意构造的 trash 文件名导致路径穿越
+	if !ValidatePathSecurity(s.notesDir, originalPath) {
+		return "", fmt.Errorf("invalid path: %s", originalPath)
+	}
+
 	fullPath := filepath.Join(s.notesDir, originalPath)
 	if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
 		return "", fmt.Errorf("failed to create parent dir: %w", err)

@@ -35,7 +35,7 @@ func TestStatisticsHandler_GetStatistics(t *testing.T) {
 		assert.Equal(t, 500, resp.StatusCode)
 
 		body, _ := io.ReadAll(resp.Body)
-		assert.Contains(t, string(body), "message")
+		assert.Contains(t, string(body), "Failed to get statistics")
 	})
 
 	t.Run("returns statistics for existing note", func(t *testing.T) {

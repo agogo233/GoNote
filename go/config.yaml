@@ -45,25 +45,39 @@ authentication:
   # 是否启用认证（环境变量：AUTHENTICATION_ENABLED）
   # 设为 true 后访问需要登录
   enabled: false
-  
+
   # ⚠️ 安全警告：暴露到互联网前必须修改这些值！
   # 以下默认值仅用于本地测试
-  
+
   # 会话密钥 - 必须修改为随机字符串！
   # 生成命令：openssl rand -hex 32
   secret_key: "change_this_to_a_random_secret_key_in_production"
-  
+
   # 密码配置 - 选择以下选项之一：
-  # Option 1: Plain text password (recommended for ease of use)
+  # Option 1: 明文密码（推荐，方便使用）
   # 密码会在启动时自动哈希处理
   # ⚠️ 默认密码是 "admin" - 生产环境请修改！
   password: "admin"
-  
+
+  # Option 2: 预哈希密码（更安全，密码不会以明文形式出现在配置文件中）
+  # 使用 bcrypt 生成哈希：htpasswd -bnBC 10 "" your_password | tr -d ':\n'
+  # password_hash: ""
+
   # 会话有效期（秒），默认 7 天
   session_max_age: 604800
-  
+
   # 安全 Cookie - 为 true 时仅在 HTTPS 连接发送 Cookie
   secure_cookie: false
+
+# ==================== 文件上传配置 ====================
+# upload:
+#   # 单个文件最大大小（MB），默认 50
+#   max_file_size_mb: 50
+#   # 请求体最大大小（MB），默认 100
+#   max_body_size_mb: 100
+#   # 允许的文件 MIME 类型，空列表表示允许所有支持的类型
+#   # 可选值: image/jpeg, image/png, image/gif, image/webp, audio/mpeg, audio/ogg, audio/wav, video/mp4, video/webm, application/pdf
+#   allowed_types: []
 
 # ==================== 定时任务配置 ====================
 # ⚠️ 后台定时任务功能尚未实现，以下配置保留为未来计划

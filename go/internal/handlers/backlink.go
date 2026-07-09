@@ -31,7 +31,7 @@ func (h *BacklinkHandler) GetBacklinks(c *fiber.Ctx) error {
 
 	backlinks, err := h.backlinkService.FindBacklinks(notePath)
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"detail": err.Error()})
+		return fiber.NewError(fiber.StatusInternalServerError, "Failed to get backlinks")
 	}
 
 	return c.JSON(fiber.Map{

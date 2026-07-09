@@ -176,21 +176,26 @@ app.Use(compress.New(compress.Config{
 		}()
 		<-quit
 		applogger.Infof("\nShutting down gracefully...")
-		noteService.StopBackgroundScanner() // Stop background scanner
-		noteService.StopCacheCleanup()      // Stop cache cleanup goroutine
 
-		// 等待后台 goroutine 完成（10s 超时）
+		// 1. 先停 HTTP 服务器（停止接受新请求 + 排空活跃请求）
+		if err := app.Shutdown(); err != nil {
+			applogger.Printf("Shutdown error: %v", err)
+		}
+
+		// 2. 再停 WebSocket（此时无新 HTTP 连接升级为 WS）
+		wsManager.Stop()
+
+		// 3. 停后台服务
+		noteService.StopBackgroundScanner()
+		noteService.StopCacheCleanup()
+
+		// 4. 等待后台 goroutine 完成（10s 超时）
 		done := make(chan struct{})
 		go noteService.WaitBackground(done)
 		select {
 		case <-done:
 		case <-time.After(10 * time.Second):
 			applogger.Printf("Warning: background goroutines did not finish within timeout")
-		}
-
-		wsManager.Stop()      // Stop WebSocket manager and close all connections
-		if err := app.Shutdown(); err != nil {
-			applogger.Printf("Shutdown error: %v", err)
 		}
 	}()
 
@@ -235,7 +240,6 @@ func setupRoutes(app *fiber.App, cfg *config.Config) (*services.NoteService, *ha
 	scanInterval := time.Duration(cfg.Cache.ScanInterval) * time.Second
 	noteService := services.NewNoteServiceWithScanner(cfg.Storage.NotesDir, cacheTTL, cfg.Cache.Capacity, scanInterval)
 	noteService.StartCacheCleanup()
-	noteService.StartBackgroundScanner()
 
 	linkIndex := services.NewLinkIndex(cfg.Storage.NotesDir)
 	noteService.SetLinkIndex(linkIndex)
@@ -247,6 +251,9 @@ func setupRoutes(app *fiber.App, cfg *config.Config) (*services.NoteService, *ha
 	searchService := services.NewSearchService(cfg.Storage.NotesDir, noteService)
 	searchIndex := services.NewSearchIndex(cfg.Storage.NotesDir, noteService)
 	noteService.SetSearchIndex(searchIndex)
+
+	// 在所有 setter 之后启动后台扫描器，避免数据竞争
+	noteService.StartBackgroundScanner()
 	tagService := services.NewTagService(noteService, cfg.Storage.NotesDir)
 	templateService := services.NewTemplateService(cfg.Storage.NotesDir)
 	shareService := services.NewShareService(cfg.Storage.NotesDir)

@@ -30,7 +30,7 @@ func (h *StatisticsHandler) GetStatistics(c *fiber.Ctx) error {
 	// Calculate statistics
 	stats, err := h.service.CalculateStatistics(notePath)
 	if err != nil {
-		return c.Status(500).JSON(models.APIResponse{Success: false, Message: err.Error()})
+		return fiber.NewError(fiber.StatusInternalServerError, "Failed to get statistics")
 	}
 
 	return c.JSON(models.APIResponse{

@@ -3447,6 +3447,17 @@ function noteApp() {
             this._loadNoteController?.abort();
             this._loadNoteController = new AbortController();
             try {
+                // 清除挂起的 autoSave 定时器，避免切换到新笔记后旧定时器触发
+                if (this.note.saveTimeout) {
+                    clearTimeout(this.note.saveTimeout);
+                    this.note.saveTimeout = null;
+                }
+                
+                // 如果当前笔记有未保存的修改，在切换前保存
+                if (this.note.current && this.note.dirty && this.note.current !== notePath) {
+                    await this.saveNote();
+                }
+                
                 // Save scroll position of current note before switching
                 if (this.note.current && this.note.current !== notePath) {
                     this.saveScrollPosition();
@@ -5783,7 +5794,7 @@ function noteApp() {
             const button = document.createElement('button');
             button.className = 'copy-code-button';
             const displayText = language || this.t('common.copy_to_clipboard').split(' ')[0]; // Use first word as fallback
-            button.innerHTML = `<span>${displayText}</span>`;
+            button.innerHTML = `<span>${this.escapeHtml(displayText)}</span>`;
             button.dataset.originalText = displayText; // Store for restore after copy
             button.title = this.t('common.copy_to_clipboard');
             

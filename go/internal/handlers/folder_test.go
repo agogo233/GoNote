@@ -29,8 +29,8 @@ func setupFolderApp(t *testing.T) (*fiber.App, *config.Config, string) {
 	app := fiber.New()
 	app.Post("/api/folders", handler.Create)
 	app.Delete("/api/folders/*", handler.Delete)
-	app.Put("/api/folders/move", handler.Move)
-	app.Put("/api/folders/rename", handler.Rename)
+	app.Post("/api/folders/move", handler.Move)
+	app.Post("/api/folders/rename", handler.Rename)
 
 	return app, cfg, tmpDir
 }
@@ -179,7 +179,7 @@ func TestFolderMove(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "old-folder"), 0755))
 
 	body := `{"oldPath": "old-folder", "newPath": "new-folder"}`
-	req := httptest.NewRequest("PUT", "/api/folders/move", bytes.NewBufferString(body))
+	req := httptest.NewRequest("POST", "/api/folders/move", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := app.Test(req)
@@ -204,7 +204,7 @@ func TestFolderMoveToSubdirectory(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "folder", "note.md"), []byte("content"), 0644))
 
 	body := `{"oldPath": "folder", "newPath": "parent/folder"}`
-	req := httptest.NewRequest("PUT", "/api/folders/move", bytes.NewBufferString(body))
+	req := httptest.NewRequest("POST", "/api/folders/move", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := app.Test(req)
@@ -222,7 +222,7 @@ func TestFolderMoveInvalidOldPath(t *testing.T) {
 	app, _, _ := setupFolderApp(t)
 
 	body := `{"oldPath": "../../../etc", "newPath": "new-folder"}`
-	req := httptest.NewRequest("PUT", "/api/folders/move", bytes.NewBufferString(body))
+	req := httptest.NewRequest("POST", "/api/folders/move", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := app.Test(req)
@@ -237,7 +237,7 @@ func TestFolderMoveInvalidNewPath(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "folder"), 0755))
 
 	body := `{"oldPath": "folder", "newPath": "../../../etc/malicious"}`
-	req := httptest.NewRequest("PUT", "/api/folders/move", bytes.NewBufferString(body))
+	req := httptest.NewRequest("POST", "/api/folders/move", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := app.Test(req)
@@ -250,7 +250,7 @@ func TestFolderMoveNonExistentSource(t *testing.T) {
 	app, _, _ := setupFolderApp(t)
 
 	body := `{"oldPath": "nonexistent", "newPath": "new-folder"}`
-	req := httptest.NewRequest("PUT", "/api/folders/move", bytes.NewBufferString(body))
+	req := httptest.NewRequest("POST", "/api/folders/move", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := app.Test(req)
@@ -267,7 +267,7 @@ func TestFolderMoveDestinationExists(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "dest"), 0755))
 
 	body := `{"oldPath": "source", "newPath": "dest"}`
-	req := httptest.NewRequest("PUT", "/api/folders/move", bytes.NewBufferString(body))
+	req := httptest.NewRequest("POST", "/api/folders/move", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := app.Test(req)
@@ -283,7 +283,7 @@ func TestFolderRename(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "old-name"), 0755))
 
 	body := `{"oldPath": "old-name", "newPath": "new-name"}`
-	req := httptest.NewRequest("PUT", "/api/folders/rename", bytes.NewBufferString(body))
+	req := httptest.NewRequest("POST", "/api/folders/rename", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := app.Test(req)
@@ -300,7 +300,7 @@ func TestFolderRenameInvalidBody(t *testing.T) {
 	app, _, _ := setupFolderApp(t)
 
 	body := `invalid json`
-	req := httptest.NewRequest("PUT", "/api/folders/rename", bytes.NewBufferString(body))
+	req := httptest.NewRequest("POST", "/api/folders/rename", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := app.Test(req)

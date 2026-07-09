@@ -114,6 +114,30 @@ func (si *SearchIndex) BuildIndex() error {
 
 	// Phase 2: Swap index atomically with brief write lock
 	si.mu.Lock()
+
+	// Detect notes that were added/updated/deleted during Phase 1 (concurrent modifications)
+	// Only when BuildIndex has been called before; first run has no prior index to diff.
+	// 语义说明：
+	//   si.noteTerms = 当前在线索引（含 Phase 1 期间的并发变更）
+	//   newNoteTerms = Phase 1 启动时的磁盘快照
+	//   si有而new无 = Phase 1 期间新增/更新的笔记 → UpdateIndex
+	//   new有而si无 = Phase 1 期间被删除的笔记   → RemoveFromIndex
+	var addedOrUpdated []string
+	var deleted []string
+
+	if si.buildDone.Load() {
+		for notePath := range si.noteTerms {
+			if _, exists := newNoteTerms[notePath]; !exists {
+				addedOrUpdated = append(addedOrUpdated, notePath)
+			}
+		}
+		for notePath := range newNoteTerms {
+			if _, exists := si.noteTerms[notePath]; !exists {
+				deleted = append(deleted, notePath)
+			}
+		}
+	}
+
 	si.index = newIndex
 	si.titleIndex = newTitleIndex
 	si.titleMap = newTitleMap
@@ -121,6 +145,17 @@ func (si *SearchIndex) BuildIndex() error {
 	si.termsSortedDirty.Store(true)
 	si.titleSortedDirty.Store(true)
 	si.mu.Unlock()
+
+	// Re-index notes that changed during Phase 1
+	// Safe: UpdateIndex/RemoveFromIndex handle their own locking
+	for _, notePath := range addedOrUpdated {
+		if err := si.UpdateIndex(notePath); err != nil {
+			logger.Printf("Error re-indexing changed note during BuildIndex merge: %v", err)
+		}
+	}
+	for _, notePath := range deleted {
+		si.RemoveFromIndex(notePath)
+	}
 
 	si.buildDone.Store(true)
 	return nil
@@ -164,8 +199,7 @@ func (si *SearchIndex) prepareSortedTerms() {
 // indexNoteTo indexes a single note into the provided index map
 // noteTerms is populated with a reverse index for fast removal (I-10).
 func (si *SearchIndex) indexNoteTo(notePath string, index map[string][]IndexEntry, titleIndex map[string][]TitleEntry, titleMap map[string]string, noteTerms map[string]map[string]bool) error {
-	fullPath := filepath.Join(si.notesDir, notePath)
-	content, err := readFileContent(fullPath)
+	content, err := si.noteService.GetNoteContent(notePath)
 	if err != nil {
 		return err
 	}
@@ -266,8 +300,7 @@ func (si *SearchIndex) indexNoteFresh(notePath string, terms []string, titleTerm
 // Phase 1: read disk + tokenize OUTSIDE lock to minimize lock hold time (I-10)
 // Phase 2: brief write lock to remove old entries (via reverse index) + add new entries
 func (si *SearchIndex) UpdateIndex(notePath string) error {
-	fullPath := filepath.Join(si.notesDir, notePath)
-	content, err := readFileContent(fullPath)
+	content, err := si.noteService.GetNoteContent(notePath)
 	if err != nil {
 		return err
 	}
