@@ -182,6 +182,10 @@ func (h *NoteHandler) Delete(c *fiber.Ctx) error {
 		h.searchIndex.RemoveFromIndex(notePath)
 	}
 
+	if h.shareService != nil {
+		h.shareService.DeleteTokenForNote(notePath)
+	}
+
 	return c.JSON(models.APIResponse{
 		Success: true,
 		Message: "Note deleted successfully",

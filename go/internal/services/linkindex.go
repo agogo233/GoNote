@@ -38,12 +38,9 @@ func NewLinkIndex(notesDir string) *LinkIndex {
 }
 
 func (li *LinkIndex) RebuildFull() {
-	li.mu.Lock()
-	defer li.mu.Unlock()
-
-	li.backlinks = make(map[string][]string)
-	li.graphEdges = make([]models.GraphEdge, 0)
-	li.graphNodes = make(map[string]bool)
+	newBacklinks := make(map[string][]string)
+	newGraphEdges := make([]models.GraphEdge, 0)
+	newGraphNodes := make(map[string]bool)
 
 	filepath.WalkDir(li.notesDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() || !strings.HasSuffix(d.Name(), ".md") {
@@ -64,17 +61,23 @@ func (li *LinkIndex) RebuildFull() {
 			if resolved == "" {
 				continue
 			}
-			li.backlinks[resolved] = append(li.backlinks[resolved], relPath)
-			li.graphEdges = append(li.graphEdges, models.GraphEdge{
+			newBacklinks[resolved] = append(newBacklinks[resolved], relPath)
+			newGraphEdges = append(newGraphEdges, models.GraphEdge{
 				Source: relPath,
 				Target: resolved,
 				Type:   link.linkType,
 			})
 		}
 
-		li.graphNodes[relPath] = true
+		newGraphNodes[relPath] = true
 		return nil
 	})
+
+	li.mu.Lock()
+	li.backlinks = newBacklinks
+	li.graphEdges = newGraphEdges
+	li.graphNodes = newGraphNodes
+	li.mu.Unlock()
 }
 
 func (li *LinkIndex) GetBacklinkSources(notePath string) []string {

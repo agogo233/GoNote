@@ -281,7 +281,7 @@ func setupRoutes(app *fiber.App, cfg *config.Config) (*services.NoteService, *ha
 
 	// Initialize handlers
 	noteHandler := handlers.NewNoteHandlerWithTagService(noteService, tagService, cfg, searchIndex, shareService)
-	folderHandler := handlers.NewFolderHandlerWithCache(cfg, noteService)
+	folderHandler := handlers.NewFolderHandlerFull(cfg, noteService, shareService, searchIndex)
 	searchHandler := handlers.NewSearchHandlerWithIndex(searchService, searchIndex, cfg)
 	tagHandler := handlers.NewTagHandler(tagService, cfg)
 	templateHandler := handlers.NewTemplateHandler(templateService, cfg)

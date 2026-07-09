@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -327,4 +328,24 @@ func (s *ShareService) UpdateTokenPath(oldPath, newPath string) error {
 // DeleteTokenForNote deletes the share token when a note is deleted
 func (s *ShareService) DeleteTokenForNote(notePath string) error {
 	return s.RevokeShareToken(notePath)
+}
+
+// MoveFolderTokens updates share token paths for all notes in a moved folder
+func (s *ShareService) MoveFolderTokens(oldPrefix, newPrefix string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	tokens, err := s.loadTokens()
+	if err != nil {
+		return err
+	}
+
+	newTokens := make(map[string]models.ShareToken, len(tokens))
+	for token, info := range tokens {
+		if strings.HasPrefix(info.Path, oldPrefix+"/") {
+			info.Path = ToPosixPath(newPrefix + strings.TrimPrefix(info.Path, oldPrefix))
+		}
+		newTokens[token] = info
+	}
+	return s.saveTokens(newTokens)
 }

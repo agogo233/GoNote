@@ -315,6 +315,24 @@ func (si *SearchIndex) RemoveFromIndex(notePath string) {
 	si.removeNoteFromIndex(notePath)
 }
 
+// RemoveFromIndexByPrefix removes all notes whose path starts with the given prefix
+func (si *SearchIndex) RemoveFromIndexByPrefix(prefix string) {
+	si.mu.Lock()
+	defer si.mu.Unlock()
+
+	var toRemove []string
+	for notePath := range si.noteTerms {
+		if notePath == prefix || strings.HasPrefix(notePath, prefix+"/") {
+			toRemove = append(toRemove, notePath)
+		}
+	}
+	for _, notePath := range toRemove {
+		si.removeNoteFromIndex(notePath)
+	}
+	si.termsSortedDirty.Store(true)
+	si.titleSortedDirty.Store(true)
+}
+
 // removeNoteFromIndex removes all entries for a note (must hold lock)
 // Uses reverse index for O(terms) instead of O(all terms) removal (I-10).
 func (si *SearchIndex) removeNoteFromIndex(notePath string) {

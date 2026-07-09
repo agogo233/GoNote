@@ -2,6 +2,7 @@ package services
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -214,4 +215,29 @@ func RenameFolder(notesDir, oldPath, newPath string) error {
 // ToPosixPath converts a path to forward slashes for consistency
 func ToPosixPath(path string) string {
 	return filepath.ToSlash(path)
+}
+
+// ListNotesUnderPath lists all .md file paths (relative to notesDir) under the given prefix
+func ListNotesUnderPath(notesDir, prefix string) ([]string, error) {
+	absDir := filepath.Join(notesDir, prefix)
+	var notes []string
+
+	err := filepath.WalkDir(absDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() || !strings.HasSuffix(d.Name(), ".md") {
+			return nil
+		}
+		rel, err := filepath.Rel(notesDir, path)
+		if err != nil {
+			return nil
+		}
+		notes = append(notes, ToPosixPath(rel))
+		return nil
+	})
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	return notes, err
 }

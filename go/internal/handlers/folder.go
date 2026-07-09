@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"strings"
+
 	"github.com/gofiber/fiber/v2"
 
 	"gonote/internal/models/config"
@@ -16,8 +18,10 @@ type CacheInvalidator interface {
 
 // FolderHandler handles folder-related requests
 type FolderHandler struct {
-	config   *config.Config
-	cacheInv CacheInvalidator
+	config       *config.Config
+	cacheInv     CacheInvalidator
+	shareService *services.ShareService
+	searchIndex  *services.SearchIndex
 }
 
 // NewFolderHandler creates a new FolderHandler
@@ -28,6 +32,11 @@ func NewFolderHandler(cfg *config.Config) *FolderHandler {
 // NewFolderHandlerWithCache creates a new FolderHandler with cache invalidation
 func NewFolderHandlerWithCache(cfg *config.Config, cacheInv CacheInvalidator) *FolderHandler {
 	return &FolderHandler{config: cfg, cacheInv: cacheInv}
+}
+
+// NewFolderHandlerFull creates a new FolderHandler with all dependencies
+func NewFolderHandlerFull(cfg *config.Config, cacheInv CacheInvalidator, shareService *services.ShareService, searchIndex *services.SearchIndex) *FolderHandler {
+	return &FolderHandler{config: cfg, cacheInv: cacheInv, shareService: shareService, searchIndex: searchIndex}
 }
 
 // Create creates a new folder
@@ -61,7 +70,7 @@ func (h *FolderHandler) Create(c *fiber.Ctx) error {
 	})
 }
 
-// Delete deletes a folder
+// Delete deletes a folder and cleans up share tokens and search index
 func (h *FolderHandler) Delete(c *fiber.Ctx) error {
 	folderPath, ok := resolvePathParam(c, h.config.Storage.NotesDir)
 	if !ok {
@@ -70,6 +79,19 @@ func (h *FolderHandler) Delete(c *fiber.Ctx) error {
 
 	if err := services.DeleteFolder(h.config.Storage.NotesDir, folderPath); err != nil {
 		return fiber.NewError(500, err.Error())
+	}
+
+	// Clean up share tokens and search index for all notes under this folder
+	notes, err := services.ListNotesUnderPath(h.config.Storage.NotesDir, folderPath)
+	if err == nil {
+		for _, notePath := range notes {
+			if h.shareService != nil {
+				h.shareService.DeleteTokenForNote(notePath)
+			}
+			if h.searchIndex != nil {
+				h.searchIndex.RemoveFromIndex(notePath)
+			}
+		}
 	}
 
 	if h.cacheInv != nil {
@@ -83,7 +105,7 @@ func (h *FolderHandler) Delete(c *fiber.Ctx) error {
 	})
 }
 
-// Move moves a folder to a new location
+// Move moves a folder, updating share tokens and search index for all notes
 func (h *FolderHandler) Move(c *fiber.Ctx) error {
 	var req struct {
 		OldPath string `json:"oldPath"`
@@ -100,12 +122,32 @@ func (h *FolderHandler) Move(c *fiber.Ctx) error {
 		return nil
 	}
 
+	// Update share token paths before moving the folder
+	if h.shareService != nil {
+		h.shareService.MoveFolderTokens(req.OldPath, req.NewPath)
+	}
+
+	// Collect old note paths for search index cleanup
+	var oldNotePaths []string
+	if h.searchIndex != nil {
+		oldNotePaths, _ = services.ListNotesUnderPath(h.config.Storage.NotesDir, req.OldPath)
+	}
+
 	// Update all wikilink references before moving
 	backlinkService := services.NewBacklinkService(h.config.Storage.NotesDir)
 	backlinkService.UpdateFolderBacklinks(req.OldPath, req.NewPath)
 
 	if err := services.MoveFolder(h.config.Storage.NotesDir, req.OldPath, req.NewPath); err != nil {
 		return fiber.NewError(500, err.Error())
+	}
+
+	// Update search index: remove old paths, add new paths
+	if h.searchIndex != nil {
+		for _, oldPath := range oldNotePaths {
+			h.searchIndex.RemoveFromIndex(oldPath)
+			newPath := strings.Replace(oldPath, req.OldPath, req.NewPath, 1)
+			h.searchIndex.UpdateIndex(newPath)
+		}
 	}
 
 	if h.cacheInv != nil {
@@ -119,7 +161,7 @@ func (h *FolderHandler) Move(c *fiber.Ctx) error {
 	})
 }
 
-// Rename renames a folder
+// Rename renames a folder, updating share tokens and search index for all notes
 func (h *FolderHandler) Rename(c *fiber.Ctx) error {
 	var req struct {
 		OldPath string `json:"oldPath"`
@@ -136,12 +178,32 @@ func (h *FolderHandler) Rename(c *fiber.Ctx) error {
 		return nil
 	}
 
+	// Update share token paths before renaming the folder
+	if h.shareService != nil {
+		h.shareService.MoveFolderTokens(req.OldPath, req.NewPath)
+	}
+
+	// Collect old note paths for search index cleanup
+	var oldNotePaths []string
+	if h.searchIndex != nil {
+		oldNotePaths, _ = services.ListNotesUnderPath(h.config.Storage.NotesDir, req.OldPath)
+	}
+
 	// Update all wikilink references before renaming
 	backlinkService := services.NewBacklinkService(h.config.Storage.NotesDir)
 	backlinkService.UpdateFolderBacklinks(req.OldPath, req.NewPath)
 
 	if err := services.RenameFolder(h.config.Storage.NotesDir, req.OldPath, req.NewPath); err != nil {
 		return fiber.NewError(500, err.Error())
+	}
+
+	// Update search index: remove old paths, add new paths
+	if h.searchIndex != nil {
+		for _, oldPath := range oldNotePaths {
+			h.searchIndex.RemoveFromIndex(oldPath)
+			newPath := strings.Replace(oldPath, req.OldPath, req.NewPath, 1)
+			h.searchIndex.UpdateIndex(newPath)
+		}
 	}
 
 	if h.cacheInv != nil {
