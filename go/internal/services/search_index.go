@@ -1,7 +1,6 @@
 package services
 
 import (
-	"container/list"
 	"html"
 	"path/filepath"
 	"regexp"
@@ -26,8 +25,8 @@ var (
 // Uses double-buffering for non-blocking index rebuilds
 type SearchIndex struct {
 	mu            sync.RWMutex
-	index         map[string]*list.List // term -> list of IndexEntry
-	titleIndex    map[string]*list.List // term -> list of TitleEntry (title-only index)
+	index         map[string][]IndexEntry   // term -> list of IndexEntry
+	titleIndex    map[string][]TitleEntry   // term -> list of TitleEntry (title-only index)
 	titleMap      map[string]string     // notePath -> title (for title lookup)
 	noteTerms     map[string]map[string]bool // reverse index: notePath -> set of terms (for fast removal, I-10)
 	notesDir      string
@@ -63,8 +62,8 @@ type IndexEntry struct {
 // NewSearchIndex creates a new search index with shared NoteService
 func NewSearchIndex(notesDir string, noteService *NoteService) *SearchIndex {
 	return &SearchIndex{
-		index:         make(map[string]*list.List),
-		titleIndex:    make(map[string]*list.List),
+		index:         make(map[string][]IndexEntry),
+		titleIndex:    make(map[string][]TitleEntry),
 		titleMap:      make(map[string]string),
 		noteTerms:     make(map[string]map[string]bool),
 		notesDir:      notesDir,
@@ -91,8 +90,8 @@ func (si *SearchIndex) getOrCompileRegex(pattern string) (*regexp.Regexp, error)
 // Uses double-buffering: builds new index without lock, then swaps atomically
 func (si *SearchIndex) BuildIndex() error {
 	// Phase 1: Build new index without holding lock (allows concurrent searches)
-	newIndex := make(map[string]*list.List)
-	newTitleIndex := make(map[string]*list.List)
+	newIndex := make(map[string][]IndexEntry)
+	newTitleIndex := make(map[string][]TitleEntry)
 	newTitleMap := make(map[string]string)
 	newNoteTerms := make(map[string]map[string]bool)
 
@@ -164,7 +163,7 @@ func (si *SearchIndex) prepareSortedTerms() {
 
 // indexNoteTo indexes a single note into the provided index map
 // noteTerms is populated with a reverse index for fast removal (I-10).
-func (si *SearchIndex) indexNoteTo(notePath string, index map[string]*list.List, titleIndex map[string]*list.List, titleMap map[string]string, noteTerms map[string]map[string]bool) error {
+func (si *SearchIndex) indexNoteTo(notePath string, index map[string][]IndexEntry, titleIndex map[string][]TitleEntry, titleMap map[string]string, noteTerms map[string]map[string]bool) error {
 	fullPath := filepath.Join(si.notesDir, notePath)
 	content, err := readFileContent(fullPath)
 	if err != nil {
@@ -183,10 +182,7 @@ func (si *SearchIndex) indexNoteTo(notePath string, index map[string]*list.List,
 
 	// Add each term to full-text index
 	for pos, term := range terms {
-		if _, ok := index[term]; !ok {
-			index[term] = list.New()
-		}
-		index[term].PushBack(IndexEntry{
+		index[term] = append(index[term], IndexEntry{
 			NotePath: notePath,
 			Position: pos,
 		})
@@ -196,10 +192,7 @@ func (si *SearchIndex) indexNoteTo(notePath string, index map[string]*list.List,
 	// Tokenize title for title index
 	titleTerms := tokenize(title)
 	for _, term := range titleTerms {
-		if _, ok := titleIndex[term]; !ok {
-			titleIndex[term] = list.New()
-		}
-		titleIndex[term].PushBack(TitleEntry{
+		titleIndex[term] = append(titleIndex[term], TitleEntry{
 			NotePath: notePath,
 			Title:    title,
 			Score:    0, // score calculated at query time
@@ -211,10 +204,7 @@ func (si *SearchIndex) indexNoteTo(notePath string, index map[string]*list.List,
 	fileName := extractFileName(notePath)
 	fileNameTerms := tokenize(fileName)
 	for _, term := range fileNameTerms {
-		if _, ok := titleIndex[term]; !ok {
-			titleIndex[term] = list.New()
-		}
-		titleIndex[term].PushBack(TitleEntry{
+		titleIndex[term] = append(titleIndex[term], TitleEntry{
 			NotePath: notePath,
 			Title:    title,
 			Score:    0,
@@ -242,10 +232,7 @@ func (si *SearchIndex) indexNoteFresh(notePath string, terms []string, titleTerm
 	termSet := make(map[string]bool)
 
 	for pos, term := range terms {
-		if _, ok := si.index[term]; !ok {
-			si.index[term] = list.New()
-		}
-		si.index[term].PushBack(IndexEntry{
+		si.index[term] = append(si.index[term], IndexEntry{
 			NotePath: notePath,
 			Position: pos,
 		})
@@ -253,10 +240,7 @@ func (si *SearchIndex) indexNoteFresh(notePath string, terms []string, titleTerm
 	}
 
 	for _, term := range titleTerms {
-		if _, ok := si.titleIndex[term]; !ok {
-			si.titleIndex[term] = list.New()
-		}
-		si.titleIndex[term].PushBack(TitleEntry{
+		si.titleIndex[term] = append(si.titleIndex[term], TitleEntry{
 			NotePath: notePath,
 			Title:    title,
 			Score:    0,
@@ -265,10 +249,7 @@ func (si *SearchIndex) indexNoteFresh(notePath string, terms []string, titleTerm
 	}
 
 	for _, term := range fileNameTerms {
-		if _, ok := si.titleIndex[term]; !ok {
-			si.titleIndex[term] = list.New()
-		}
-		si.titleIndex[term].PushBack(TitleEntry{
+		si.titleIndex[term] = append(si.titleIndex[term], TitleEntry{
 			NotePath: notePath,
 			Title:    title,
 			Score:    0,
@@ -346,29 +327,31 @@ func (si *SearchIndex) removeNoteFromIndex(notePath string) {
 	for term := range terms {
 		// Remove from full-text index
 		if entries, ok := si.index[term]; ok {
-			for e := entries.Front(); e != nil; {
-				next := e.Next()
-				if e.Value.(IndexEntry).NotePath == notePath {
-					entries.Remove(e)
+			filtered := entries[:0]
+			for _, entry := range entries {
+				if entry.NotePath != notePath {
+					filtered = append(filtered, entry)
 				}
-				e = next
 			}
-			if entries.Len() == 0 {
+			if len(filtered) == 0 {
 				delete(si.index, term)
+			} else {
+				si.index[term] = filtered
 			}
 		}
 
 		// Remove from title index
 		if entries, ok := si.titleIndex[term]; ok {
-			for e := entries.Front(); e != nil; {
-				next := e.Next()
-				if e.Value.(TitleEntry).NotePath == notePath {
-					entries.Remove(e)
+			filtered := entries[:0]
+			for _, entry := range entries {
+				if entry.NotePath != notePath {
+					filtered = append(filtered, entry)
 				}
-				e = next
 			}
-			if entries.Len() == 0 {
+			if len(filtered) == 0 {
 				delete(si.titleIndex, term)
+			} else {
+				si.titleIndex[term] = filtered
 			}
 		}
 	}
@@ -383,32 +366,30 @@ func (si *SearchIndex) removeNoteFromIndex(notePath string) {
 // Used as fallback when reverse index is unavailable.
 func (si *SearchIndex) removeNoteFromIndexFullScan(notePath string) {
 	for term, entries := range si.index {
-		for e := entries.Front(); e != nil; {
-			next := e.Next()
-			entry := e.Value.(IndexEntry)
-			if entry.NotePath == notePath {
-				entries.Remove(e)
+		filtered := entries[:0]
+		for _, entry := range entries {
+			if entry.NotePath != notePath {
+				filtered = append(filtered, entry)
 			}
-			e = next
 		}
-
-		if entries.Len() == 0 {
+		if len(filtered) == 0 {
 			delete(si.index, term)
+		} else {
+			si.index[term] = filtered
 		}
 	}
 
 	for term, entries := range si.titleIndex {
-		for e := entries.Front(); e != nil; {
-			next := e.Next()
-			entry := e.Value.(TitleEntry)
-			if entry.NotePath == notePath {
-				entries.Remove(e)
+		filtered := entries[:0]
+		for _, entry := range entries {
+			if entry.NotePath != notePath {
+				filtered = append(filtered, entry)
 			}
-			e = next
 		}
-
-		if entries.Len() == 0 {
+		if len(filtered) == 0 {
 			delete(si.titleIndex, term)
+		} else {
+			si.titleIndex[term] = filtered
 		}
 	}
 
@@ -539,8 +520,8 @@ func (si *SearchIndex) findNotesWithPrefix(prefix string) map[string]bool {
 			i++
 			continue
 		}
-		for e := entries.Front(); e != nil; e = e.Next() {
-			notes[e.Value.(IndexEntry).NotePath] = true
+		for _, entry := range entries {
+			notes[entry.NotePath] = true
 		}
 		i++
 	}
@@ -563,8 +544,8 @@ func (si *SearchIndex) noteContainsTermsWithPrefix(notePath string, terms []stri
 				i++
 				continue
 			}
-			for e := entries.Front(); e != nil; e = e.Next() {
-				if e.Value.(IndexEntry).NotePath == notePath {
+			for _, entry := range entries {
+				if entry.NotePath == notePath {
 					hit = true
 					break
 				}
@@ -672,8 +653,7 @@ func (si *SearchIndex) findTitlesWithPrefix(prefix string) map[string]string {
 
 	for term, entries := range si.titleIndex {
 		if strings.HasPrefix(term, prefix) || strings.Contains(term, prefix) {
-			for e := entries.Front(); e != nil; e = e.Next() {
-				entry := e.Value.(TitleEntry)
+			for _, entry := range entries {
 				if title, ok := si.titleMap[entry.NotePath]; ok {
 					result[entry.NotePath] = title
 				}
@@ -814,8 +794,7 @@ func (si *SearchIndex) searchTitleByPrefix(prefix string) ([]models.SearchResult
 			break
 		}
 		entries := si.titleIndex[term]
-		for e := entries.Front(); e != nil; e = e.Next() {
-			entry := e.Value.(TitleEntry)
+		for _, entry := range entries {
 			if seen[entry.NotePath] {
 				continue
 			}
@@ -1069,8 +1048,7 @@ func (si *SearchIndex) searchTitleByPrefixInternal(prefix string) ([]models.Sear
 
 	for term, entries := range si.titleIndex {
 		if strings.HasPrefix(term, prefixLower) {
-			for e := entries.Front(); e != nil; e = e.Next() {
-				entry := e.Value.(TitleEntry)
+			for _, entry := range entries {
 				if seen[entry.NotePath] {
 					continue
 				}
