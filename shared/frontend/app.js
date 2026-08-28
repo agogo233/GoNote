@@ -2931,58 +2931,63 @@ function noteApp() {
 
         // Convert HTML anchor tags from clipboard to Markdown links
         // e.g., <a href="https://example.com">Page Title</a> -> [Page Title](https://example.com)
+        // Uses DOM traversal instead of regex on innerHTML to handle multi-line titles,
+        // adjacent anchors, and multi-byte Chinese characters reliably.
         convertHtmlLinksToMarkdown(html) {
-            // Parse the HTML content
             const parser = new DOMParser();
             const doc = parser.parseFromString(html, 'text/html');
 
-            // Check if the clipboard contains anchor tags with href
-            const anchors = doc.body.querySelectorAll('a[href]');
-            if (anchors.length === 0) {
+            if (doc.body.querySelectorAll('a[href]').length === 0) {
                 return null;
             }
 
-            // Convert the HTML body content, replacing anchor tags with Markdown links
-            let bodyHtml = doc.body.innerHTML;
+            let text = this.domToMarkdownText(doc.body);
 
-            // Replace all anchor tags with Markdown format
-            bodyHtml = bodyHtml.replace(/<a\s+[^>]*href=["']([^"']*)["'][^>]*>(.*?)<\/a>/gi, (match, href, innerHtml) => {
-                // Skip anchors that contain other block elements or complex nested structures
-                if (/<(div|p|table|ul|ol|img|video|audio)/i.test(innerHtml)) {
-                    return match; // Leave complex anchors as plain text
-                }
-
-                // Strip any remaining HTML from the inner text
-                const tempDiv = document.createElement('div');
-                tempDiv.innerHTML = innerHtml;
-                const title = tempDiv.textContent.trim() || href;
-
-                return `[${title}](${href})`;
-            });
-
-            // Extract just the text content from the converted HTML
-            const tempBody = document.createElement('div');
-            tempBody.innerHTML = bodyHtml;
-            let textContent = tempBody.textContent;
-
-            // Clean up excessive whitespace but preserve structure
-            textContent = textContent
+            text = text
                 .replace(/\r\n/g, '\n')
-                .replace(/\n{3,}/g, '\n\n')  // Max 2 consecutive newlines
+                .replace(/[ \t]+\n/g, '\n')
+                .replace(/\n{3,}/g, '\n\n')
                 .trim();
 
-            // If the result is empty or just a single simple URL, return null to fall through to default paste
-            if (!textContent) {
+            if (!text) {
                 return null;
             }
 
-            // Check if it's just a bare URL (no title found) - let default paste handle it
             const markdownLinkRegex = /\[.+\]\(.+\)/;
-            if (!markdownLinkRegex.test(textContent) && /^https?:\/\//.test(textContent)) {
-                return null; // Bare URL, let browser default handle it
+            if (!markdownLinkRegex.test(text) && /^https?:\/\//.test(text)) {
+                return null;
             }
 
-            return textContent;
+            return text;
+        },
+
+        // Recursively convert DOM nodes to plain text with Markdown links.
+        // Does not recurse into <a> elements to avoid double-processing nested anchors.
+        domToMarkdownText(node) {
+            let out = '';
+            for (const child of node.childNodes) {
+                if (child.nodeType === Node.TEXT_NODE) {
+                    out += child.textContent;
+                } else if (child.nodeType === Node.ELEMENT_NODE) {
+                    const tag = child.tagName.toLowerCase();
+                    if (tag === 'a') {
+                        const href = child.getAttribute('href');
+                        if (href) {
+                            const title = (child.textContent || '').trim() || href;
+                            out += `[${title}](${href})`;
+                        } else {
+                            out += this.domToMarkdownText(child);
+                        }
+                    } else if (tag === 'br') {
+                        out += '\n';
+                    } else if (['div', 'p', 'li', 'tr', 'section', 'article', 'header', 'footer', 'blockquote'].includes(tag) || /^h[1-6]$/.test(tag)) {
+                        out += '\n' + this.domToMarkdownText(child) + '\n';
+                    } else {
+                        out += this.domToMarkdownText(child);
+                    }
+                }
+            }
+            return out;
         },
         
         // Media type detection based on file extension
