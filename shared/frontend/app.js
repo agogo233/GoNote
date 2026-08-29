@@ -8,6 +8,9 @@ const CONFIG = {
     SCROLL_SYNC_DELAY: 50,             // ms - Delay to prevent scroll sync interference
     SCROLL_SYNC_MAX_RETRIES: 10,       // Maximum attempts to find editor/preview elements
     SCROLL_SYNC_RETRY_INTERVAL: 100,   // ms - Time between setupScrollSync retries
+    SCROLL_SYNC_ANCHORED: true,        // Use anchor-based bidirectional scroll sync
+    SCROLL_SYNC_TEXT_ANCHORS: true,    // Add non-heading text anchors for finer alignment
+    ANCHOR_REBUILD_DELAY: 150,         // ms - Debounce before rebuilding sync anchors after render
     MAX_UNDO_HISTORY: 50,              // Maximum number of undo steps to keep
     DEFAULT_SIDEBAR_WIDTH: 256,        // px - Default sidebar width (w-64 in Tailwind)
     HOMEPAGE_MAX_NOTES: 50,            // Maximum notes to show on homepage grid
@@ -89,6 +92,11 @@ const NoteCache = {
     setScrollPosition(notePath, editorScroll, previewScroll) {
         this.scrollPositions.set(notePath, { editor: editorScroll, preview: previewScroll });
     },
+    
+    // Anchor tables for scroll sync (see NoteApp.buildSyncAnchors).
+    // Non-reactive on purpose: rebuilt on every preview render / layout change.
+    syncEdges: null,        // [{ a: editorY, b: previewY }] sorted by a
+    syncEdgesReverse: null, // [{ a: previewY, b: editorY }] sorted by a
     
     // Clear all note-related caches (call when notes are reloaded)
     clearNoteCaches() {
@@ -843,6 +851,8 @@ function noteApp() {
                 // Scroll to top when switching modes
                 this.$nextTick(() => {
                     this.scrollToTop();
+                    // Panes' visibility changed: rebuild anchors now that the layout is settled
+                    this.scheduleAnchorRebuild(60);
                 });
             });
             
@@ -1157,6 +1167,8 @@ function noteApp() {
         toggleReadableLineLength() {
             this.ui.readableLineLength = !this.ui.readableLineLength;
             localStorage.setItem('readableLineLength', this.ui.readableLineLength);
+            // Changing preview max-width reflows its content, invalidating sync anchors
+            this.$nextTick(() => this.scheduleAnchorRebuild());
         },
         
         // Hide underscore folders toggle (hides _attachments, _templates, etc. from sidebar)
@@ -1876,38 +1888,223 @@ function noteApp() {
             }, 1000);
         },
 
-        // Find the nearest heading above the editor viewport top
-        findNearestHeadingInEditor(editor) {
-            if (!this.note.outline || this.note.outline.length === 0) return null;
-            const lineHeight = parseFloat(getComputedStyle(editor).lineHeight) || 24;
-            const paddingTop = parseFloat(getComputedStyle(editor).paddingTop) || 24;
-            const topLine = Math.max(1, Math.round((editor.scrollTop - paddingTop) / lineHeight) + 1);
-            let nearest = null;
-            for (const h of this.note.outline) {
-                if (h.line <= topLine) nearest = h;
-                else break;
+        // Convert a 1-indexed text line number to a character offset in the given content
+        lineToOffset(content, line) {
+            if (!content || line < 1) return 0;
+            const lines = content.split('\n');
+            let offset = 0;
+            const end = Math.min(line - 1, lines.length);
+            for (let i = 0; i < end; i++) {
+                offset += lines[i].length + 1; // +1 for newline
             }
-            return nearest;
+            return offset;
         },
 
-        // Find the heading closest to the preview viewport top
-        findNearestHeadingInPreview(previewContainer) {
-            if (!this.note.outline || this.note.outline.length === 0) return null;
-            const containerRect = previewContainer.getBoundingClientRect();
-            let nearest = null;
-            let minDist = Infinity;
-            for (const h of this.note.outline) {
-                const el = document.getElementById(h.slug);
-                if (el && previewContainer.contains(el)) {
-                    const rect = el.getBoundingClientRect();
-                    const dist = Math.abs(rect.top - containerRect.top);
-                    if (dist < minDist) {
-                        minDist = dist;
-                        nearest = h;
+        // Lazily create (once) a hidden measurement mirror that reproduces the editor's
+        // text layout. Used by editorPixelForOffset because a <textarea>'s value is not
+        // a DOM text node, so native Range geometry is unavailable.
+        getMeasureMirror(editor) {
+            let mirror = this._measureMirrorEl;
+            if (!mirror) {
+                mirror = document.createElement('div');
+                mirror.setAttribute('aria-hidden', 'true');
+                mirror.style.cssText = 'position:absolute; visibility:hidden; pointer-events:none; top:0; left:-9999px; box-sizing:border-box; overflow:hidden;';
+                document.body.appendChild(mirror);
+                this._measureMirrorEl = mirror;
+            }
+
+            const cs = getComputedStyle(editor);
+            const contentWidth = editor.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
+            const props = ['fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'fontVariant',
+                'letterSpacing', 'lineHeight', 'wordSpacing', 'tabSize', 'whiteSpace',
+                'wordWrap', 'overflowWrap', 'textTransform'];
+            for (const p of props) {
+                const v = cs[p];
+                if (v) mirror.style[p] = v;
+            }
+            mirror.style.width = contentWidth + 'px';
+            mirror.style.padding = '0';
+            mirror.style.border = '0';
+            return mirror;
+        },
+
+        // Return the Y position (in editor content coordinates, comparable with
+        // editor.scrollTop) of a character offset. Measured through a hidden mirror
+        // element, so it stays correct even when lines soft-wrap (white-space: pre-wrap).
+        editorPixelForOffset(offset) {
+            const editor = NoteCache.domCache.editor || document.querySelector('.editor-textarea');
+            if (!editor) return null;
+
+            const text = editor.value || '';
+            if (offset === null || offset < 0 || offset > text.length) return null;
+
+            const paddingTop = parseFloat(getComputedStyle(editor).paddingTop) || 0;
+
+            // Measurement fallback if the mirror cannot be built (e.g. editor hidden)
+            let mirror = null;
+            try {
+                mirror = this.getMeasureMirror(editor);
+            } catch (e) {
+                mirror = null;
+            }
+            if (!mirror || !mirror.style.width || parseFloat(mirror.style.width) <= 0) {
+                const lineHeight = parseFloat(getComputedStyle(editor).lineHeight) || 24;
+                const line = (text.substring(0, offset).match(/\n/g) || []).length;
+                return line * lineHeight + paddingTop;
+            }
+
+            mirror.textContent = text.slice(0, offset);
+            // scrollHeight equals the height up to the line containing `offset`
+            return paddingTop + mirror.scrollHeight;
+        },
+
+        // Build a short, searchable text fingerprint for a preview block element
+        anchorSnippet(el) {
+            const tag = el.tagName;
+            if (tag === 'PRE') {
+                const code = el.querySelector('code');
+                if (code && code.textContent) {
+                    const t = code.textContent.replace(/\s+/g, ' ').trim();
+                    return t ? t.slice(0, 48) : null;
+                }
+                return null;
+            }
+            if (tag === 'TABLE') return null;
+            if (el.classList && el.classList.contains('media-embed')) {
+                const media = el.querySelector('img, audio, video, iframe');
+                if (media) {
+                    const alt = media.getAttribute('title') || media.getAttribute('alt') || '';
+                    return alt.trim() ? alt.trim().slice(0, 48) : null;
+                }
+                return null;
+            }
+            const text = (el.textContent || '').replace(/\s+/g, ' ').trim();
+            return text ? text.slice(0, 48) : null;
+        },
+
+        // Build the anchor table mapping editor scroll offsets to preview scroll offsets.
+        // Level 1 anchors are headings (exact source offsets from the outline). Level 2
+        // anchors are additional text blocks, located in the source via their leading text.
+        buildSyncAnchors() {
+            const editor = NoteCache.domCache.editor || document.querySelector('.editor-textarea');
+            const preview = NoteCache.domCache.previewContainer || (NoteCache.domCache.previewContent ? NoteCache.domCache.previewContent.parentElement : null);
+            const previewContent = NoteCache.domCache.previewContent;
+
+            NoteCache.syncEdges = null;
+            NoteCache.syncEdgesReverse = null;
+
+            if (!editor || !preview || !previewContent) return;
+
+            // Guard against a hidden pane: display:none yields zero scroll heights and
+            // garbage anchor values. Skip building; the sync falls back to percentages.
+            if (editor.scrollHeight <= 0 || preview.scrollHeight <= 0) return;
+
+            // Nothing to sync when either pane has no scrollable range
+            if (editor.scrollHeight - editor.clientHeight <= 0 || preview.scrollHeight - preview.clientHeight <= 0) return;
+
+            const content = this.note.content || '';
+            if (!content) return;
+
+            const containerRect = preview.getBoundingClientRect();
+            const anchors = [];
+
+            // Level 1: headings (precise source offsets from the outline)
+            for (const h of this.note.outline || []) {
+                const el = h.slug ? document.getElementById(h.slug) : null;
+                if (!el || !preview.contains(el)) continue;
+                const offset = this.lineToOffset(content, h.line);
+                const rect = el.getBoundingClientRect();
+                const previewY = rect.top - containerRect.top + preview.scrollTop;
+                const editorY = this.editorPixelForOffset(offset);
+                if (editorY === null || editorY < 0 || !isFinite(previewY)) continue;
+                anchors.push({ editorY, previewY });
+            }
+
+            // Level 2: additional text blocks (approximate source offsets)
+            if (CONFIG.SCROLL_SYNC_TEXT_ANCHORS) {
+                let lastOffset = -1;
+                let l2Count = 0;
+                const L2_MAX = 150;   // cap measurement cost on very long documents
+                const L2_SAMPLE = 3;  // after the cap, keep every Nth block
+                for (const el of previewContent.children) {
+                    if (!el || el.nodeType !== Node.ELEMENT_NODE) continue;
+                    const tag = el.tagName;
+                    if (tag && /^H[1-6]$/.test(tag)) continue; // already covered by outline
+                    if (el.classList && el.classList.contains('mermaid-rendered')) continue;
+                    if (l2Count >= L2_MAX && l2Count % L2_SAMPLE !== 0) {
+                        l2Count++;
+                        continue;
                     }
+                    l2Count++;
+                    const snippet = this.anchorSnippet(el);
+                    if (!snippet) continue;
+                    // Search forward from the previous anchor so duplicate snippets map to
+                    // the earliest occurrence after it
+                    const found = content.indexOf(snippet, lastOffset + 1);
+                    if (found === -1) continue;
+                    const offset = found;
+                    const rect = el.getBoundingClientRect();
+                    const previewY = rect.top - containerRect.top + preview.scrollTop;
+                    const editorY = this.editorPixelForOffset(offset);
+                    if (editorY === null || editorY < 0 || !isFinite(previewY)) continue;
+                    anchors.push({ editorY, previewY });
+                    lastOffset = offset;
                 }
             }
-            return nearest;
+
+            if (anchors.length === 0) return;
+
+            // Sort by preview position, then drop anchors that break editor monotonicity
+            anchors.sort((a, b) => a.previewY - b.previewY);
+            const clean = [];
+            let lastEditorY = -Infinity;
+            for (const a of anchors) {
+                if (a.editorY <= lastEditorY) continue;
+                clean.push(a);
+                lastEditorY = a.editorY;
+            }
+            if (clean.length === 0) return;
+
+            // Sentinel endpoints so interpolation covers the full scroll range
+            clean.unshift({ editorY: 0, previewY: 0 });
+            clean.push({
+                editorY: editor.scrollHeight - editor.clientHeight,
+                previewY: preview.scrollHeight - preview.clientHeight
+            });
+
+            NoteCache.syncEdges = clean.map(a => ({ a: a.editorY, b: a.previewY }));
+            NoteCache.syncEdgesReverse = clean.map(a => ({ a: a.previewY, b: a.editorY }));
+        },
+
+        // Debounced anchor rebuild (called after preview renders and async layout changes)
+        scheduleAnchorRebuild(delay) {
+            const timerDelay = (typeof delay === 'number' && delay > 0) ? delay : CONFIG.ANCHOR_REBUILD_DELAY;
+            if (this._anchorRebuildTimeout) clearTimeout(this._anchorRebuildTimeout);
+            this._anchorRebuildTimeout = setTimeout(() => {
+                this._anchorRebuildTimeout = null;
+                this.buildSyncAnchors();
+            }, timerDelay);
+        },
+
+        // Piecewise-linear interpolation over edges [{ a, b }] sorted by a.
+        // Returns null when no usable edges are present.
+        interpY(edges, y) {
+            const n = edges.length;
+            if (n === 0) return null;
+            if (y <= edges[0].a) return edges[0].b - (edges[0].a - y);
+            if (y >= edges[n - 1].a) return edges[n - 1].b + (y - edges[n - 1].a);
+
+            // Binary search: largest index with edges[i].a <= y
+            let lo = 0, hi = n - 1;
+            while (lo < hi) {
+                const mid = (lo + hi + 1) >> 1;
+                if (edges[mid].a <= y) lo = mid; else hi = mid - 1;
+            }
+            const e0 = edges[lo];
+            const e1 = edges[lo + 1];
+            const span = e1.a - e0.a;
+            if (span <= 0) return e0.b;
+            return e0.b + (y - e0.a) * (e1.b - e0.b) / span;
         },
 
         // Unified filtering logic combining tags and text search
@@ -5302,7 +5499,9 @@ function noteApp() {
                 setTimeout(() => {
                     const previewContent = NoteCache.domCache.previewContent || document.querySelector('.markdown-preview');
                     if (previewContent) {
-                        MathJax.typesetPromise([previewContent]).catch((err) => {
+                        MathJax.typesetPromise([previewContent]).then(() => {
+                            this.scheduleAnchorRebuild(60);
+                        }).catch((err) => {
                             console.error('MathJax typesetting failed:', err);
                         });
                     }
@@ -5390,6 +5589,8 @@ function noteApp() {
                         pre.parentElement.insertBefore(errorMsg, pre.nextSibling);
                     }
                 }
+                // Diagrams replace code blocks (and change their height), so refresh anchors
+                this.scheduleAnchorRebuild(60);
             });
         },
         
@@ -5770,6 +5971,10 @@ function noteApp() {
             NoteCache.lastRenderedContent = this.note.content;
             NoteCache.cachedRenderedHTML = html;
             
+            // Rebuild scroll-sync anchors once the fresh preview is in the DOM
+            // (debounced; Alpine applies x-html on the next tick)
+            this.scheduleAnchorRebuild();
+            
             return html;
         },
         
@@ -5934,10 +6139,38 @@ function noteApp() {
                 preview.removeEventListener('scroll', this._previewScrollHandler);
             }
             
-            // Create new scroll handlers with heading-anchored sync
-            // Key improvement: uses heading positions as anchor points for precise alignment
-            // between editor text lines and rendered preview elements. Falls back to
-            // percentage-based sync when no heading is near the viewport.
+            // Attach one-time listeners that keep anchors fresh when async layout
+            // changes occur. The preview element persists across re-renders, so
+            // attaching once is safe.
+            if (!this._anchorRebuildListenersAttached) {
+                this._anchorRebuildListenersAttached = true;
+                const previewContent = NoteCache.domCache.previewContent;
+                if (previewContent) {
+                    // Capture phase catches async media loads (img/video/audio/iframe)
+                    previewContent.addEventListener('load', (e) => {
+                        if (e.target && /^(IMG|VIDEO|AUDIO|IFRAME)$/.test(e.target.tagName || '')) {
+                            this.scheduleAnchorRebuild();
+                        }
+                    }, true);
+                }
+                // Observe both panes so anchors are refreshed on any layout change:
+                // window resize, split drag, sidebar toggle, zen mode, readable width, etc.
+                if (typeof ResizeObserver !== 'undefined') {
+                    this._anchorResizeObserver = new ResizeObserver(() => this.scheduleAnchorRebuild());
+                    this._anchorResizeObserver.observe(editor);
+                    this._anchorResizeObserver.observe(preview);
+                } else {
+                    window.addEventListener('resize', () => this.scheduleAnchorRebuild());
+                }
+            }
+            
+            // Build the anchor table used for precise bidirectional sync. Anchors map
+            // editor scroll offsets to preview scroll offsets; between anchors we
+            // interpolate linearly, keeping both panes aligned even when rendered
+            // preview height is not proportional to source (images/code/tables).
+            this.buildSyncAnchors();
+            
+            // Sync editor -> preview
             this._editorScrollHandler = () => {
                 if (this.ui.isScrolling) return;
                 
@@ -5948,43 +6181,26 @@ function noteApp() {
                 if (previewScrollableHeight <= 0) return;
                 
                 let targetScrollTop = null;
-                
-                // Near extremes use percentage-based sync to keep both panes aligned
-                const lineHeight = parseFloat(getComputedStyle(editor).lineHeight) || 24;
-                const EXTREME_THRESHOLD = lineHeight * 3;
-                const isNearTop = editor.scrollTop < EXTREME_THRESHOLD;
-                const isNearBottom = editor.scrollTop > scrollableHeight - EXTREME_THRESHOLD;
-                
-                if (!isNearTop && !isNearBottom) {
-                    // Try heading-anchored sync in the "body" of the document
-                    const heading = this.findNearestHeadingInEditor(editor);
-                    if (heading) {
-                        const headingEl = document.getElementById(heading.slug);
-                        if (headingEl && preview.contains(headingEl)) {
-                            const paddingTop = parseFloat(getComputedStyle(editor).paddingTop) || 24;
-                            const headingEditorY = (heading.line - 1) * lineHeight + paddingTop;
-                            const offsetFromViewport = headingEditorY - editor.scrollTop;
-                            const containerRect = preview.getBoundingClientRect();
-                            const headingRect = headingEl.getBoundingClientRect();
-                            const headingPreviewY = headingRect.top - containerRect.top + preview.scrollTop;
-                            targetScrollTop = headingPreviewY - offsetFromViewport;
-                        }
-                    }
+                if (CONFIG.SCROLL_SYNC_ANCHORED && NoteCache.syncEdges) {
+                    targetScrollTop = this.interpY(NoteCache.syncEdges, editor.scrollTop);
                 }
                 
-                // Fallback to percentage-based sync (also used at extremes)
+                // Fallback to percentage-based sync
                 if (targetScrollTop === null) {
-                    const scrollPercentage = editor.scrollTop / scrollableHeight;
-                    targetScrollTop = scrollPercentage * previewScrollableHeight;
+                    targetScrollTop = (editor.scrollTop / scrollableHeight) * previewScrollableHeight;
                 }
+                
+                const clamped = Math.max(0, Math.min(targetScrollTop, previewScrollableHeight));
+                if (Math.abs(preview.scrollTop - clamped) < 0.5) return;
                 
                 this.ui.isScrolling = true;
-                preview.scrollTop = Math.max(0, Math.min(targetScrollTop, preview.scrollHeight - preview.clientHeight));
+                preview.scrollTop = clamped;
                 setTimeout(() => {
                     this.ui.isScrolling = false;
                 }, CONFIG.SCROLL_SYNC_DELAY);
             };
             
+            // Sync preview -> editor
             this._previewScrollHandler = () => {
                 if (this.ui.isScrolling) return;
                 
@@ -5995,30 +6211,20 @@ function noteApp() {
                 if (editorScrollableHeight <= 0) return;
                 
                 let targetScrollTop = null;
-                
-                // Near extremes use percentage-based sync
-                const EXTREME_THRESHOLD = preview.clientHeight * 0.1;
-                const isNearTop = preview.scrollTop < EXTREME_THRESHOLD;
-                const isNearBottom = preview.scrollTop > scrollableHeight - EXTREME_THRESHOLD;
-                
-                if (!isNearTop && !isNearBottom) {
-                    // Try heading-anchored sync in the "body" of the document
-                    const heading = this.findNearestHeadingInPreview(preview);
-                    if (heading && heading.line) {
-                        const lineHeight = parseFloat(getComputedStyle(editor).lineHeight) || 24;
-                        const paddingTop = parseFloat(getComputedStyle(editor).paddingTop) || 24;
-                        targetScrollTop = (heading.line - 1) * lineHeight + paddingTop - editor.clientHeight / 3;
-                    }
+                if (CONFIG.SCROLL_SYNC_ANCHORED && NoteCache.syncEdgesReverse) {
+                    targetScrollTop = this.interpY(NoteCache.syncEdgesReverse, preview.scrollTop);
                 }
                 
-                // Fallback to percentage-based sync (also used at extremes)
+                // Fallback to percentage-based sync
                 if (targetScrollTop === null) {
-                    const scrollPercentage = preview.scrollTop / scrollableHeight;
-                    targetScrollTop = scrollPercentage * editorScrollableHeight;
+                    targetScrollTop = (preview.scrollTop / scrollableHeight) * editorScrollableHeight;
                 }
+                
+                const clamped = Math.max(0, Math.min(targetScrollTop, editorScrollableHeight));
+                if (Math.abs(editor.scrollTop - clamped) < 0.5) return;
                 
                 this.ui.isScrolling = true;
-                editor.scrollTop = Math.max(0, Math.min(targetScrollTop, editor.scrollHeight - editor.clientHeight));
+                editor.scrollTop = clamped;
                 setTimeout(() => {
                     this.ui.isScrolling = false;
                 }, CONFIG.SCROLL_SYNC_DELAY);
