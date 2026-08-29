@@ -10,7 +10,11 @@
     <!-- Preload translations (async fetch, same approach as index.html) -->
     <script>
         (async function() {
-            const locale = localStorage.getItem('locale') || 'en-US';
+            // Match index.html locale detection: saved > browser language > zh-CN
+            const browserLang = navigator.language || navigator.userLanguage || 'zh-CN';
+            const browserLocale = browserLang.startsWith('zh') ? 'zh-CN'
+                : browserLang.startsWith('en') ? 'en-US' : 'zh-CN';
+            const locale = localStorage.getItem('locale') || browserLocale;
             const fallbackLocale = locale !== 'en-US' ? 'en-US' : null;
             window.__translations = {};
             

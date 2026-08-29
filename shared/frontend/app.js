@@ -19,6 +19,14 @@ const CONFIG = {
 // Expose HOMEPAGE_MAX_NOTES globally for Alpine.js template access
 const HOMEPAGE_MAX_NOTES = CONFIG.HOMEPAGE_MAX_NOTES;
 
+// Detect locale from browser language (zh* -> zh-CN, en* -> en-US, else zh-CN)
+function detectBrowserLocale() {
+    const browserLang = navigator.language || navigator.userLanguage || 'zh-CN';
+    if (browserLang.startsWith('zh')) return 'zh-CN';
+    if (browserLang.startsWith('en')) return 'en-US';
+    return 'zh-CN';
+}
+
 // ============================================
 // NON-REACTIVE CACHE - 非响应式缓存（组件外部）
 // 完全脱离 Alpine.js 响应式追踪，减少内存占用和提升性能
@@ -387,14 +395,7 @@ function noteApp() {
         
         // 国际化状态
         i18n: {
-            locale: (function() {
-                const saved = localStorage.getItem('locale');
-                if (saved) return saved;
-                const browserLang = navigator.language || navigator.userLanguage || 'zh-CN';
-                if (browserLang.startsWith('zh')) return 'zh-CN';
-                if (browserLang.startsWith('en')) return 'en-US';
-                return 'zh-CN';
-            })(),
+            locale: localStorage.getItem('locale') || detectBrowserLocale(),
             available: [],
             translations: window.__preloadedTranslations || {},
         },
@@ -1401,24 +1402,28 @@ function noteApp() {
         },
         
         // Load translations for a specific locale
-        async loadLocale(localeCode = null) {
-            const targetLocale = localeCode || localStorage.getItem('locale') || 'en-US';
-            
+        // persist=false for fallback loads so a transient failure
+        // can't override the user's saved locale
+        async loadLocale(localeCode = null, persist = true) {
+            const targetLocale = localeCode || localStorage.getItem('locale') || detectBrowserLocale();
+
             try {
                 const response = await fetch(`/api/locales/${targetLocale}`);
                 if (response.ok) {
                     this.i18n.translations = await response.json();
                     this.i18n.locale = targetLocale;
-                    localStorage.setItem('locale', targetLocale);
+                    if (persist) {
+                        localStorage.setItem('locale', targetLocale);
+                    }
                 } else if (targetLocale !== 'en-US') {
                     // Fallback to en-US if requested locale not found
-                    await this.loadLocale('en-US');
+                    await this.loadLocale('en-US', false);
                 }
             } catch (error) {
                 console.error('Failed to load locale:', error);
                 // If en-US also fails, translations will be empty and t() will return keys
                 if (targetLocale !== 'en-US') {
-                    await this.loadLocale('en-US');
+                    await this.loadLocale('en-US', false);
                 }
             }
         },

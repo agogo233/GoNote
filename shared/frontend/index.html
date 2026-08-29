@@ -60,11 +60,11 @@
                     if (data) {
                         window.__preloadedTranslations = data;
                     } else if (locale !== 'en-US') {
-                        // Fallback to en-US if preferred locale fails
+                        // Fallback to en-US for display only; do not persist
+                        // so a transient failure can't override the user's locale
                         return loadTranslations('en-US').then(function(fallbackData) {
                             if (fallbackData) {
                                 window.__preloadedTranslations = fallbackData;
-                                localStorage.setItem('locale', 'en-US');
                             }
                         });
                     }

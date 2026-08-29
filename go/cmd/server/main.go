@@ -258,8 +258,8 @@ func setupRoutes(app *fiber.App, cfg *config.Config) (*services.NoteService, *ha
 	templateService := services.NewTemplateService(cfg.Storage.NotesDir)
 	shareService := services.NewShareService(cfg.Storage.NotesDir)
 	mediaService := services.NewMediaService(cfg.Storage.NotesDir)
-	themePath := resolveStaticPath("themes", "../shared/themes", "./themes")
-	localePath := resolveStaticPath("locales", "../shared/locales", "./locales")
+	themePath := resolveStaticPath("themes", "./shared/themes", "../shared/themes", "./themes")
+	localePath := resolveStaticPath("locales", "./shared/locales", "../shared/locales", "./locales")
 
 	themeService := services.NewThemeService(themePath)
 	localeService := services.NewLocaleService(localePath)
