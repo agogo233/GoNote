@@ -713,6 +713,20 @@ function noteApp() {
             window.__noteapp_initialized = true;
             
             try {
+                // Adopt translations preloaded by index.html. The preload fetch is async:
+                // if still in flight, adopt them when translationsLoaded fires (non-blocking,
+                // no need to stall the rest of init); otherwise adopt the snapshot right away.
+                const adoptTranslations = () => {
+                    if (window.__preloadedTranslations) {
+                        this.i18n.translations = window.__preloadedTranslations;
+                    }
+                };
+                if (window.__translationsLoading) {
+                    document.addEventListener('translationsLoaded', adoptTranslations, { once: true });
+                } else {
+                    adoptTranslations();
+                }
+
                 // Expose minimal whitelist for native event handlers in x-html content
                 window.__app = {
                     showAlert: this.showAlert.bind(this),
@@ -757,7 +771,7 @@ function noteApp() {
                 await this.loadThemes();
                 await this.initTheme();
                 await this.loadAvailableLocales();
-                // Note: Translations are preloaded synchronously before Alpine init (see index.html)
+                // Note: Translations are adopted at init() start (see adoptTranslations above);
                 // loadLocale() is only called when user changes language from settings
                 await this.loadNotes();
                 await this.loadSharedNotePaths();
