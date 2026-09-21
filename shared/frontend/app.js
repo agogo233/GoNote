@@ -5,7 +5,6 @@ const CONFIG = {
     AUTOSAVE_DELAY: 1000,              // ms - Delay before triggering autosave
     SEARCH_DEBOUNCE_DELAY: 500,        // ms - Delay before running note search while typing
     SAVE_INDICATOR_DURATION: 2000,     // ms - How long to show "saved" indicator
-    SCROLL_SYNC_DELAY: 50,             // ms - Delay to prevent scroll sync interference
     SCROLL_SYNC_MAX_RETRIES: 10,       // Maximum attempts to find editor/preview elements
     SCROLL_SYNC_RETRY_INTERVAL: 100,   // ms - Time between setupScrollSync retries
     SCROLL_SYNC_ANCHORED: true,        // Use anchor-based bidirectional scroll sync
@@ -71,6 +70,14 @@ const NoteCache = {
     previewDebounceTimeout: null,
     lastRenderedContent: '',
     cachedRenderedHTML: '',
+    // 0-based line in the full note content where the preview content starts
+    // (after YAML frontmatter is stripped). Used to map preview block line
+    // numbers back to editor (textarea) line numbers.
+    renderFirstContentLine: 0,
+    // True when per-block data-line anchors could not be injected into the
+    // rendered preview (e.g. raw HTML producing a mismatched number of
+    // top-level nodes). buildSyncAnchors falls back to text-snippet anchors.
+    dataLineFailed: false,
     mathDebounceTimeout: null,
     mermaidDebounceTimeout: null,
     
@@ -446,7 +453,6 @@ function noteApp() {
             syntaxHighlightEnabled: false,
             syntaxHighlightTimeout: null,
             hideUnderscoreFolders: localStorage.getItem('hideUnderscoreFolders') === 'true',
-            isScrolling: false,
             linkCopied: false,
         },
         
@@ -711,6 +717,30 @@ function noteApp() {
             // Prevent double initialization (Alpine.js may call x-init twice in some cases)
             if (window.__noteapp_initialized) return;
             window.__noteapp_initialized = true;
+
+            // Scroll-sync echo suppression state. Initialized here (not in
+            // setupScrollSync) so scrollToTop()/restoreScrollPosition() can guard the
+            // programmatic-scroll echo even before any note has been loaded.
+            this._suppressEditorEcho = false;
+            this._suppressPreviewEcho = false;
+            this._editorScrollRaf = null;
+            this._previewScrollRaf = null;
+            this._echoClearToken = 0;
+            // Release the echo-suppression flags after the programmatic scroll's
+            // echo event has been dispatched. A double rAF lands after the echo of
+            // the current frame; a short timeout backs it up because rAF is throttled
+            // in background tabs. The token guard ignores stale releases so a newer
+            // suppression cycle is never cleared early by an older one.
+            this._scheduleEchoClear = () => {
+                const token = ++this._echoClearToken;
+                const release = () => {
+                    if (token !== this._echoClearToken) return;
+                    this._suppressEditorEcho = false;
+                    this._suppressPreviewEcho = false;
+                };
+                requestAnimationFrame(() => requestAnimationFrame(release));
+                setTimeout(release, 120);
+            };
             
             try {
                 // Adopt translations preloaded by index.html. The preload fetch is async:
@@ -1996,6 +2026,78 @@ function noteApp() {
             return text ? text.slice(0, 48) : null;
         },
 
+        // Inject a data-line attribute on each top-level preview element giving its
+        // 1-based line number in the full note content (textarea). This replaces the
+        // fragile text-snippet search used previously for non-heading anchors: every
+        // block gets an anchor, with no ambiguity from markdown syntax conversion.
+        //
+        // Alignment relies on the fact that the string passed to marked.parse() is
+        // the original note content with only YAML frontmatter stripped (wikilink and
+        // code-block placeholder round-trips preserve line structure), so the lexer's
+        // block token order matches the rendered top-level elements one-to-one.
+        injectDataLineAnchors(container, contentToRender) {
+            NoteCache.dataLineFailed = false;
+            if (!container || !contentToRender) {
+                NoteCache.dataLineFailed = true;
+                return;
+            }
+
+            // marked.lexer() normalizes CRLF/CR line endings to LF internally, so the
+            // token raws it produces never contain \r. Locate them against an LF-only
+            // view of the source, otherwise a CRLF note would misalign every line.
+            const src = contentToRender.replace(/\r\n|\r/g, '\n');
+
+            let tokens;
+            try {
+                // Same lexer configuration used by renderedMarkdown (custom tokenizer,
+                // breaks, gfm) so token order matches the rendered output exactly.
+                tokens = marked.lexer(src);
+            } catch (e) {
+                NoteCache.dataLineFailed = true;
+                return;
+            }
+
+            // Walk every top-level token, locating its raw text sequentially in the
+            // source. space/def tokens produce no DOM node, so they advance the cursor
+            // but contribute no line number; only DOM-producing tokens are recorded.
+            // Line numbers are computed by cumulative newline count (O(n) overall)
+            // instead of slicing+counting the whole prefix for every token.
+            const children = Array.from(container.children);
+            let pos = 0;
+            let newlineCount = 0;
+            const tokenLines = [];
+            for (const t of tokens) {
+                if (!t || !t.raw) continue;
+                let start = src.indexOf(t.raw, pos);
+                if (start === -1) start = pos; // tolerate minor raw drift
+                // Count newlines in the gap between the previous token and this one,
+                // then add this token's own newlines (marked absorbs trailing newlines
+                // into raw, so they live inside raws rather than the gaps). Cumulative
+                // count avoids an O(n^2) slice-per-token line lookup.
+                const gap = src.slice(pos, start);
+                newlineCount += gap.length ? (gap.match(/\n/g) || []).length : 0;
+                if (t.type !== 'space' && t.type !== 'def') {
+                    tokenLines.push(newlineCount + 1); // 1-based
+                }
+                newlineCount += (t.raw.match(/\n/g) || []).length;
+                pos = start + t.raw.length;
+            }
+
+            // Strict 1:1 check: every DOM-producing token must map to exactly one
+            // top-level element. Mismatch (raw HTML spanning multiple/no nodes, empty
+            // comments, etc.) means anchors would be misaligned, so bail out and let
+            // buildSyncAnchors fall back to text-snippet anchors.
+            if (tokenLines.length === 0 || tokenLines.length !== children.length) {
+                NoteCache.dataLineFailed = true;
+                return;
+            }
+
+            const offset = NoteCache.renderFirstContentLine || 0;
+            for (let i = 0; i < children.length; i++) {
+                children[i].setAttribute('data-line', String(tokenLines[i] + offset));
+            }
+        },
+
         // Build the anchor table mapping editor scroll offsets to preview scroll offsets.
         // Level 1 anchors are headings (exact source offsets from the outline). Level 2
         // anchors are additional text blocks, located in the source via their leading text.
@@ -2022,6 +2124,37 @@ function noteApp() {
             const containerRect = preview.getBoundingClientRect();
             const anchors = [];
 
+            // Primary path: per-block data-line anchors injected by the renderer. Every
+            // rendered block (paragraphs, lists, tables, code, blockquotes, ...) gets an
+            // anchor, replacing the fragile text-snippet search. Headings are skipped
+            // here because the outline-based Level 1 anchors below cover them with the
+            // same precision. A measurement cap keeps long documents affordable.
+            if (!NoteCache.dataLineFailed && CONFIG.SCROLL_SYNC_TEXT_ANCHORS) {
+                let count = 0;
+                const MAX_BLOCK_ANCHORS = 400;  // cap measurement cost on very long docs
+                const BLOCK_SAMPLE = 3;          // after the cap, keep every Nth block
+                for (const el of previewContent.children) {
+                    if (!el || el.nodeType !== Node.ELEMENT_NODE) continue;
+                    const tag = el.tagName;
+                    if (tag && /^H[1-6]$/.test(tag)) continue; // covered by outline below
+                    const lineStr = el.getAttribute('data-line');
+                    if (lineStr === null) continue; // e.g. mermaid-rendered lost its attribute
+                    const line = parseInt(lineStr, 10);
+                    if (!Number.isFinite(line) || line < 1) continue;
+                    const offset = this.lineToOffset(content, line);
+                    const rect = el.getBoundingClientRect();
+                    const previewY = rect.top - containerRect.top + preview.scrollTop;
+                    const editorY = this.editorPixelForOffset(offset);
+                    if (editorY === null || editorY < 0 || !isFinite(previewY)) continue;
+                    if (count >= MAX_BLOCK_ANCHORS && count % BLOCK_SAMPLE !== 0) {
+                        count++;
+                        continue;
+                    }
+                    count++;
+                    anchors.push({ editorY, previewY });
+                }
+            }
+
             // Level 1: headings (precise source offsets from the outline)
             for (const h of this.note.outline || []) {
                 const el = h.slug ? document.getElementById(h.slug) : null;
@@ -2034,8 +2167,9 @@ function noteApp() {
                 anchors.push({ editorY, previewY });
             }
 
-            // Level 2: additional text blocks (approximate source offsets)
-            if (CONFIG.SCROLL_SYNC_TEXT_ANCHORS) {
+            // Level 2: additional text blocks (approximate source offsets).
+            // Fallback only: used when data-line anchors could not be injected.
+            if (CONFIG.SCROLL_SYNC_TEXT_ANCHORS && NoteCache.dataLineFailed) {
                 let lastOffset = -1;
                 let l2Count = 0;
                 const L2_MAX = 150;   // cap measurement cost on very long documents
@@ -5591,7 +5725,12 @@ function noteApp() {
                         container.innerHTML = svg;
                         // Store original code for theme re-rendering
                         container.dataset.originalCode = code;
-                        
+
+                        // Preserve the source-line anchor so scroll sync stays aligned
+                        // after the code block is replaced by the rendered diagram.
+                        const dataLine = pre.getAttribute('data-line');
+                        if (dataLine !== null) container.setAttribute('data-line', dataLine);
+
                         // Replace the code block with the rendered diagram
                         pre.parentElement.replaceChild(container, pre);
                     } catch (error) {
@@ -5637,15 +5776,24 @@ function noteApp() {
         
         // Computed property for rendered markdown
         get renderedMarkdown() {
-            if (!this.note.content) return '<p style="color: var(--text-tertiary);">Nothing to preview yet...</p>';
+            if (!this.note.content) {
+                // No content to anchor; let buildSyncAnchors fall back so stale
+                // anchors don't linger between notes.
+                NoteCache.dataLineFailed = true;
+                return '<p style="color: var(--text-tertiary);">Nothing to preview yet...</p>';
+            }
             
             // Performance: Return cached HTML if content hasn't changed
             if (this.note.content === NoteCache.lastRenderedContent && NoteCache.cachedRenderedHTML) {
+                // The cached HTML already has data-line attributes baked in (or not),
+                // so restore the matching failure flag for buildSyncAnchors.
+                NoteCache.dataLineFailed = !/data-line=/.test(NoteCache.cachedRenderedHTML);
                 return NoteCache.cachedRenderedHTML;
             }
             
             // Strip YAML frontmatter from content before rendering
             let contentToRender = this.note.content;
+            NoteCache.renderFirstContentLine = 0; // default: no frontmatter stripped
             if (contentToRender.trim().startsWith('---')) {
                 const lines = contentToRender.split('\n');
                 if (lines[0].trim() === '---') {
@@ -5658,8 +5806,18 @@ function noteApp() {
                         }
                     }
                     if (endIdx !== -1) {
-                        // Remove frontmatter (including the closing ---) and any empty lines after it
-                        contentToRender = lines.slice(endIdx + 1).join('\n').trim();
+                        // Remove frontmatter (including the closing ---) and any empty lines after it.
+                        // Record the exact 0-based line in the full note content where the
+                        // preview content begins, so preview block line numbers can be mapped
+                        // back to editor (textarea) line numbers. The .trim() below may drop
+                        // leading blank lines, so account for them here.
+                        const rawSliced = lines.slice(endIdx + 1).join('\n');
+                        // Normalize line endings before counting leading blank lines, so a
+                        // CRLF note reports the same offsets as the LF-normalized lexer.
+                        const normSliced = rawSliced.replace(/\r\n|\r/g, '\n');
+                        const leadingNewlines = (normSliced.match(/^\n+/) || [''])[0].length;
+                        NoteCache.renderFirstContentLine = endIdx + 1 + leadingNewlines;
+                        contentToRender = rawSliced.trim();
                     }
                 }
             }
@@ -5937,7 +6095,13 @@ function noteApp() {
                     img.setAttribute('title', altText);
                 }
             });
-            
+
+            // Inject per-block source line numbers into the top-level preview
+            // elements so scroll-sync anchors can map preview blocks to editor
+            // lines precisely (see NoteApp.buildSyncAnchors). The attributes are
+            // baked into the returned HTML string, so they survive caching.
+            this.injectDataLineAnchors(tempDiv, contentToRender);
+
             html = tempDiv.innerHTML;
             
             // Debounced MathJax rendering (avoid re-running on every keystroke)
@@ -6183,65 +6347,79 @@ function noteApp() {
             // interpolate linearly, keeping both panes aligned even when rendered
             // preview height is not proportional to source (images/code/tables).
             this.buildSyncAnchors();
-            
-            // Sync editor -> preview
+
+            // Sync editor -> preview. User scroll events are coalesced through
+            // requestAnimationFrame so rapid scrolling produces one sync per frame
+            // instead of one per scroll event (fewer layout reads/writes).
             this._editorScrollHandler = () => {
-                if (this.ui.isScrolling) return;
-                
+                if (this._suppressEditorEcho) return;
+                if (this._editorScrollRaf) return;
+                this._editorScrollRaf = requestAnimationFrame(() => {
+                    this._editorScrollRaf = null;
+                    if (this._suppressEditorEcho) return;
+                    this.syncEditorToPreview();
+                });
+            };
+
+            this.syncEditorToPreview = () => {
                 const scrollableHeight = editor.scrollHeight - editor.clientHeight;
                 if (scrollableHeight <= 0) return;
-                
+
                 const previewScrollableHeight = preview.scrollHeight - preview.clientHeight;
                 if (previewScrollableHeight <= 0) return;
-                
+
                 let targetScrollTop = null;
                 if (CONFIG.SCROLL_SYNC_ANCHORED && NoteCache.syncEdges) {
                     targetScrollTop = this.interpY(NoteCache.syncEdges, editor.scrollTop);
                 }
-                
+
                 // Fallback to percentage-based sync
                 if (targetScrollTop === null) {
                     targetScrollTop = (editor.scrollTop / scrollableHeight) * previewScrollableHeight;
                 }
-                
+
                 const clamped = Math.max(0, Math.min(targetScrollTop, previewScrollableHeight));
                 if (Math.abs(preview.scrollTop - clamped) < 0.5) return;
-                
-                this.ui.isScrolling = true;
+
+                this._suppressPreviewEcho = true;
                 preview.scrollTop = clamped;
-                setTimeout(() => {
-                    this.ui.isScrolling = false;
-                }, CONFIG.SCROLL_SYNC_DELAY);
+                this._scheduleEchoClear();
             };
-            
-            // Sync preview -> editor
+
+            // Sync preview -> editor (coalesced via requestAnimationFrame)
             this._previewScrollHandler = () => {
-                if (this.ui.isScrolling) return;
-                
+                if (this._suppressPreviewEcho) return;
+                if (this._previewScrollRaf) return;
+                this._previewScrollRaf = requestAnimationFrame(() => {
+                    this._previewScrollRaf = null;
+                    if (this._suppressPreviewEcho) return;
+                    this.syncPreviewToEditor();
+                });
+            };
+
+            this.syncPreviewToEditor = () => {
                 const scrollableHeight = preview.scrollHeight - preview.clientHeight;
                 if (scrollableHeight <= 0) return;
-                
+
                 const editorScrollableHeight = editor.scrollHeight - editor.clientHeight;
                 if (editorScrollableHeight <= 0) return;
-                
+
                 let targetScrollTop = null;
                 if (CONFIG.SCROLL_SYNC_ANCHORED && NoteCache.syncEdgesReverse) {
                     targetScrollTop = this.interpY(NoteCache.syncEdgesReverse, preview.scrollTop);
                 }
-                
+
                 // Fallback to percentage-based sync
                 if (targetScrollTop === null) {
                     targetScrollTop = (preview.scrollTop / scrollableHeight) * editorScrollableHeight;
                 }
-                
+
                 const clamped = Math.max(0, Math.min(targetScrollTop, editorScrollableHeight));
                 if (Math.abs(editor.scrollTop - clamped) < 0.5) return;
-                
-                this.ui.isScrolling = true;
+
+                this._suppressEditorEcho = true;
                 editor.scrollTop = clamped;
-                setTimeout(() => {
-                    this.ui.isScrolling = false;
-                }, CONFIG.SCROLL_SYNC_DELAY);
+                this._scheduleEchoClear();
             };
             
             // Attach new listeners
@@ -6915,56 +7093,56 @@ function noteApp() {
                 this.refreshDOMCache();
             }
             
-            // Disable scroll sync temporarily
-            this.ui.isScrolling = true;
-            
+            // Suppress the echo of these programmatic scrolls so they don't fight back;
+            // cleared on the next frame, which is when the queued echo events fire.
+            this._suppressEditorEcho = true;
+            this._suppressPreviewEcho = true;
+
             // Restore scroll positions based on view mode
             if (this.ui.viewMode === 'edit' || this.ui.viewMode === 'split') {
                 if (NoteCache.domCache.editor) {
                     NoteCache.domCache.editor.scrollTop = position.editor;
                 }
             }
-            
+
             if (this.ui.viewMode === 'preview' || this.ui.viewMode === 'split') {
                 if (NoteCache.domCache.previewContainer) {
                     NoteCache.domCache.previewContainer.scrollTop = position.preview;
                 }
             }
-            
-            // Re-enable scroll sync after a short delay
-            setTimeout(() => {
-                this.ui.isScrolling = false;
-            }, CONFIG.SCROLL_SYNC_DELAY);
+
+            // Re-enable scroll sync after the echo events have been processed
+            this._scheduleEchoClear();
         },
         
         // Scroll to top of editor and preview
         scrollToTop() {
-            // Disable scroll sync temporarily to prevent interference
-            this.ui.isScrolling = true;
-            
+            // Suppress the echo of these programmatic scrolls so they don't fight back;
+            // cleared on the next frame, which is when the queued echo events fire.
+            this._suppressEditorEcho = true;
+            this._suppressPreviewEcho = true;
+
             // Use cached references (refresh if not available)
             if (!NoteCache.domCache.editor || !NoteCache.domCache.previewContainer) {
                 this.refreshDOMCache();
             }
-            
+
             // Only scroll the visible panes based on viewMode
             if (this.ui.viewMode === 'edit' || this.ui.viewMode === 'split') {
                 if (NoteCache.domCache.editor) {
                     NoteCache.domCache.editor.scrollTop = 0;
                 }
             }
-            
+
             if (this.ui.viewMode === 'preview' || this.ui.viewMode === 'split') {
                 // Scroll the preview container (parent of .markdown-preview)
                 if (NoteCache.domCache.previewContainer) {
                     NoteCache.domCache.previewContainer.scrollTop = 0;
                 }
             }
-            
-            // Re-enable scroll sync after a short delay
-            setTimeout(() => {
-                this.ui.isScrolling = false;
-            }, CONFIG.SCROLL_SYNC_DELAY);
+
+            // Re-enable scroll sync after the echo events have been processed
+            this._scheduleEchoClear();
         },
         
         // Export current note as HTML
@@ -7200,6 +7378,10 @@ function noteApp() {
                     container.className = 'mermaid-rendered';
                     container.style.cssText = 'background-color: transparent; padding: 20px; text-align: center; overflow-x: auto;';
                     container.innerHTML = svg;
+                    // Preserve the source-line anchor so scroll sync stays aligned
+                    // after the code block is replaced by the rendered diagram.
+                    const dataLine = pre.getAttribute('data-line');
+                    if (dataLine !== null) container.setAttribute('data-line', dataLine);
                     pre.parentElement.replaceChild(container, pre);
                 } catch (error) {
                     console.error('Mermaid rendering error:', error);
