@@ -248,6 +248,7 @@ func (s *ExportService) GenerateExportHTML(title, content, themeCSS string, isDa
         
         .markdown-preview ul, .markdown-preview ol { padding-left: 2em; margin: 1em 0; }
         .markdown-preview li { margin: 0.25em 0; }
+        .markdown-preview li[data-task="true"] { list-style: none; }
         
         .markdown-preview table { border-collapse: collapse; width: 100%; margin: 1em 0; }
         .markdown-preview th, .markdown-preview td { border: 1px solid var(--border-color, #e1e4e8); padding: 0.5em 1em; text-align: left; }
@@ -264,6 +265,23 @@ func (s *ExportService) GenerateExportHTML(title, content, themeCSS string, isDa
     
     <script>
         marked.setOptions({ gfm: true, breaks: true, headerIds: true, mangle: false });
+        // Custom listitem renderer: keep task-list checkboxes inline with text.
+        // marked wraps loose-list item content in <p>, which pushes the checkbox
+        // onto its own line; strip those tags for task items.
+        const exportRenderer = new marked.Renderer();
+        exportRenderer.listitem = function(token) {
+            if (token.task) {
+                const checkbox = '<input type="checkbox" ' + (token.checked ? 'checked' : '') + ' disabled /> ';
+                let body = this.parser.parse(token.tokens, !!token.loose);
+                body = body
+                    .replace(/<\/p>\s*<p>/g, '<br>')
+                    .replace(/<\/?p[^>]*>/g, '')
+                    .replace(/^\s+/, '');
+                return '<li data-task="true">' + checkbox + body + '</li>\n';
+            }
+            return '<li>' + this.parser.parse(token.tokens, !!token.loose) + '</li>\n';
+        };
+        marked.setOptions({ renderer: exportRenderer });
         const markdown = "` + escapedContent + `";
         document.getElementById('content').innerHTML = DOMPurify.sanitize(marked.parse(markdown));
     </script>

@@ -5942,8 +5942,13 @@ function noteApp() {
             // Custom listitem renderer to make checkboxes interactive
             renderer.listitem = function(text, task, checked) {
                 if (task) {
-                    // Remove the default disabled checkbox from text and add interactive one
-                    const cleanText = text.replace(/<input[^>]*type="checkbox"[^>]*>[ \t]*/, '');
+                    // Remove the default disabled checkbox from text and add interactive one.
+                    // Strip wrapping <p> tags (marked wraps loose-list items) and leading whitespace
+                    // so the checkbox stays inline with the text.
+                    const cleanText = text
+                        .replace(/<input[^>]*type="checkbox"[^>]*>[ \t]*/, '')
+                        .replace(/<\/?p[^>]*>/g, '')
+                        .replace(/^\s+/, '');
                     const checkboxState = checked ? 'checked' : '';
                     return `<li data-task="true"><input type="checkbox" ${checkboxState} data-interactive-checkbox />${cleanText}</li>\n`;
                 }
