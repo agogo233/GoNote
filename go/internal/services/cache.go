@@ -187,23 +187,6 @@ func (c *Cache) Len() int {
 	return len(c.items)
 }
 
-// LenValid returns the number of non-expired items in the cache.
-// Thread-safe for concurrent use.
-func (c *Cache) LenValid() int {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	now := time.Now()
-	count := 0
-	for _, elem := range c.items {
-		entry := elem.Value.(*cacheEntry)
-		if now.Before(entry.expiresAt) {
-			count++
-		}
-	}
-	return count
-}
-
 // evictOldest removes the least recently used item from the cache.
 // Must be called with the lock held.
 func (c *Cache) evictOldest() {
@@ -296,18 +279,4 @@ func (c *Cache) cleanup() {
 			delete(c.items, entry.key)
 		}
 	}
-}
-
-// Capacity returns the maximum number of items the cache can hold.
-func (c *Cache) Capacity() int {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.capacity
-}
-
-// TTL returns the time-to-live duration for cache entries.
-func (c *Cache) TTL() time.Duration {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.ttl
 }

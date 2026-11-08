@@ -1021,22 +1021,13 @@ func (s *NoteService) WaitForReady() {
 // IsReady returns true if the first scan has completed.
 // If background scanner is not enabled (ready is nil), returns true immediately.
 func (s *NoteService) IsReady() bool {
-	if s.ready == nil {
-		return true // No background scanner, always ready
-	}
-	select {
-	case <-s.ready:
-		return true
-	default:
-		return false
-	}
+	return s.IsScannerReady()
 }
 
 // ClearCache clears the note cache.
 // Uses Clear() instead of replacing the pointer to avoid leaking the old cache's cleanup goroutine.
 func (s *NoteService) ClearCache() {
-	s.cache.Clear()
-	s.tagCache.Clear()
+	s.InvalidateCache()
 }
 
 func (s *NoteService) ListTrashNotes() ([]string, error) {

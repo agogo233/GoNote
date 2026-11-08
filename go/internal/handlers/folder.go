@@ -105,8 +105,7 @@ func (h *FolderHandler) Delete(c *fiber.Ctx) error {
 	})
 }
 
-// Move moves a folder, updating share tokens and search index for all notes
-func (h *FolderHandler) Move(c *fiber.Ctx) error {
+func (h *FolderHandler) moveOrRename(c *fiber.Ctx, op func(notesDir, oldPath, newPath string) error, message string) error {
 	var req struct {
 		OldPath string `json:"oldPath"`
 		NewPath string `json:"newPath"`
@@ -137,7 +136,7 @@ func (h *FolderHandler) Move(c *fiber.Ctx) error {
 	backlinkService := services.NewBacklinkService(h.config.Storage.NotesDir)
 	backlinkService.UpdateFolderBacklinks(req.OldPath, req.NewPath)
 
-	if err := services.MoveFolder(h.config.Storage.NotesDir, req.OldPath, req.NewPath); err != nil {
+	if err := op(h.config.Storage.NotesDir, req.OldPath, req.NewPath); err != nil {
 		return fiber.NewError(500, err.Error())
 	}
 
@@ -157,64 +156,18 @@ func (h *FolderHandler) Move(c *fiber.Ctx) error {
 	return c.JSON(models.FolderResponse{
 		Success: true,
 		Path:    req.NewPath,
-		Message: "Folder moved successfully",
+		Message: message,
 	})
+}
+
+// Move moves a folder, updating share tokens and search index for all notes
+func (h *FolderHandler) Move(c *fiber.Ctx) error {
+	return h.moveOrRename(c, services.MoveFolder, "Folder moved successfully")
 }
 
 // Rename renames a folder, updating share tokens and search index for all notes
 func (h *FolderHandler) Rename(c *fiber.Ctx) error {
-	var req struct {
-		OldPath string `json:"oldPath"`
-		NewPath string `json:"newPath"`
-	}
-
-	if err := c.BodyParser(&req); err != nil {
-		return c.Status(400).JSON(fiber.Map{"detail": "Invalid request body"})
-	}
-
-	// Security checks
-	if !validatePath(c, h.config.Storage.NotesDir, req.OldPath) ||
-		!validatePath(c, h.config.Storage.NotesDir, req.NewPath) {
-		return nil
-	}
-
-	// Update share token paths before renaming the folder
-	if h.shareService != nil {
-		h.shareService.MoveFolderTokens(req.OldPath, req.NewPath)
-	}
-
-	// Collect old note paths for search index cleanup
-	var oldNotePaths []string
-	if h.searchIndex != nil {
-		oldNotePaths, _ = services.ListNotesUnderPath(h.config.Storage.NotesDir, req.OldPath)
-	}
-
-	// Update all wikilink references before renaming
-	backlinkService := services.NewBacklinkService(h.config.Storage.NotesDir)
-	backlinkService.UpdateFolderBacklinks(req.OldPath, req.NewPath)
-
-	if err := services.RenameFolder(h.config.Storage.NotesDir, req.OldPath, req.NewPath); err != nil {
-		return fiber.NewError(500, err.Error())
-	}
-
-	// Update search index: remove old paths, add new paths
-	if h.searchIndex != nil {
-		for _, oldPath := range oldNotePaths {
-			h.searchIndex.RemoveFromIndex(oldPath)
-			newPath := strings.Replace(oldPath, req.OldPath, req.NewPath, 1)
-			h.searchIndex.UpdateIndex(newPath)
-		}
-	}
-
-	if h.cacheInv != nil {
-		h.cacheInv.InvalidateCache()
-	}
-
-	return c.JSON(models.FolderResponse{
-		Success: true,
-		Path:    req.NewPath,
-		Message: "Folder renamed successfully",
-	})
+	return h.moveOrRename(c, services.RenameFolder, "Folder renamed successfully")
 }
 
 func (h *FolderHandler) RegisterRoutes(api fiber.Router) {

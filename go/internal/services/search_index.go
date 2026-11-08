@@ -73,17 +73,8 @@ func NewSearchIndex(notesDir string, noteService *NoteService) *SearchIndex {
 	}
 }
 
-// getOrCompileRegex 从缓存中获取已编译的正则，避免热路径上反复编译。
 func (si *SearchIndex) getOrCompileRegex(pattern string) (*regexp.Regexp, error) {
-	if cached, ok := si.regexCache.Load(pattern); ok {
-		return cached.(*regexp.Regexp), nil
-	}
-	re, err := regexp.Compile(pattern)
-	if err != nil {
-		return nil, err
-	}
-	si.regexCache.Store(pattern, re)
-	return re, nil
+	return getOrCompileRegex(&si.regexCache, pattern)
 }
 
 // BuildIndex builds the full search index from all notes
@@ -442,49 +433,7 @@ func (si *SearchIndex) Search(query string) ([]models.SearchResult, error) {
 	si.mu.RLock()
 	defer si.mu.RUnlock()
 
-	if query == "" {
-		return []models.SearchResult{}, nil
-	}
-
-	terms := tokenize(query)
-	if len(terms) == 0 {
-		return si.searchFromDisk(query)
-	}
-
-	var results []models.SearchResult
-	matchedNotes := make(map[string]bool)
-
-	firstTerm := terms[0]
-	candidateNotes := si.findNotesWithPrefix(firstTerm)
-
-	if len(candidateNotes) == 0 {
-		return si.searchFromDisk(query)
-	}
-
-	for notePath := range candidateNotes {
-		if matchedNotes[notePath] {
-			continue
-		}
-
-		if si.noteContainsTermsWithPrefix(notePath, terms) {
-			content, err := si.noteService.GetNoteContent(notePath)
-			if err != nil {
-				continue
-			}
-
-			if si.contentContainsAllKeywords(content, terms) {
-				matchedNotes[notePath] = true
-				result := si.buildSearchResult(notePath, content, query)
-				results = append(results, result)
-			}
-		}
-	}
-
-	if len(results) == 0 {
-		return si.searchFromDisk(query)
-	}
-
-	return results, nil
+	return si.searchInternal(query)
 }
 
 // searchFromDisk performs a full disk scan fallback using regex pattern matching.
@@ -500,7 +449,7 @@ func (si *SearchIndex) searchFromDisk(query string) ([]models.SearchResult, erro
 	escapedQuery := regexp.QuoteMeta(query)
 
 	// Case-insensitive pattern
-	pattern, err := regexp.Compile("(?i)" + escapedQuery)
+	pattern, err := si.getOrCompileRegex("(?i)" + escapedQuery)
 	if err != nil {
 		return nil, err
 	}
@@ -601,82 +550,7 @@ func (si *SearchIndex) SearchByTitle(query string) ([]models.SearchResult, error
 	si.mu.RLock()
 	defer si.mu.RUnlock()
 
-	if query == "" {
-		return []models.SearchResult{}, nil
-	}
-
-	queryLower := strings.ToLower(query)
-	queryTerms := tokenize(query)
-
-	if len(queryTerms) == 0 {
-		// Single character or short query - try prefix matching on titleIndex
-		return si.searchTitleByPrefix(queryLower)
-	}
-
-	// Multi-term query: find notes whose titles contain all terms (with prefix matching)
-	type titleScore struct {
-		notePath string
-		title    string
-		score    float64
-	}
-	var matches []titleScore
-	matchedNotes := make(map[string]bool)
-
-	// Find candidate notes using first term prefix
-	candidates := si.findTitlesWithPrefix(queryTerms[0])
-
-	for notePath, title := range candidates {
-		if matchedNotes[notePath] {
-			continue
-		}
-
-		// Check if title or filename contains all query terms (prefix matching)
-		if si.titleContainsTerms(notePath, title, queryTerms) {
-			matchedNotes[notePath] = true
-			// 计算分数：如果标题包含所有查询词，使用标题计分；否则使用文件名计分
-			titleLower := strings.ToLower(title)
-			fileName := extractFileName(notePath)
-			allInTitle := true
-			for _, term := range queryTerms {
-				if !strings.Contains(titleLower, term) {
-					allInTitle = false
-					break
-				}
-			}
-			var score float64
-			if allInTitle {
-				score = si.calculateTitleScore(title, queryLower)
-			} else {
-				score = si.calculateTitleScore(fileName, queryLower)
-			}
-			matches = append(matches, titleScore{
-				notePath: notePath,
-				title:    title,
-				score:    score,
-			})
-		}
-	}
-
-	// Sort by score descending (stable sort for deterministic order)
-	sort.SliceStable(matches, func(i, j int) bool {
-		return matches[i].score > matches[j].score
-	})
-
-	// Build search results
-	var results []models.SearchResult
-	for _, m := range matches {
-		result := si.buildTitleResult(m.notePath, m.title, query)
-		result.Score = m.score
-		results = append(results, result)
-	}
-
-	// If no results from index, fall back to scanning all notes from disk
-	// This handles cases where the index might not be fully up-to-date
-	if len(results) == 0 {
-		return si.searchTitleFromDisk(query)
-	}
-
-	return results, nil
+	return si.searchByTitleInternal(query)
 }
 
 // findTitlesWithPrefix finds all notes whose titles contain terms starting with the prefix
@@ -818,8 +692,8 @@ func (si *SearchIndex) searchTitleByPrefix(prefix string) ([]models.SearchResult
 
 	prefixLower := strings.ToLower(prefix)
 
-	// 调用方（SearchByTitle）已在入口处 prepareSortedTerms 重建过，
-	// 这里直接用 sortedTitleTerms 二分；持 RLock 阶段不再自行重建。
+	// 契约：调用方必须已调用 prepareSortedTerms 重建过并持有 RLock，
+	// 这里直接用 sortedTitleTerms 二分；持锁阶段不再自行重建。
 	i := sort.SearchStrings(si.sortedTitleTerms, prefixLower)
 	for i < len(si.sortedTitleTerms) {
 		term := si.sortedTitleTerms[i]
@@ -1004,7 +878,7 @@ func (si *SearchIndex) searchByTitleInternal(query string) ([]models.SearchResul
 	queryTerms := tokenize(query)
 
 	if len(queryTerms) == 0 {
-		return si.searchTitleByPrefixInternal(queryLower)
+		return si.searchTitleByPrefix(queryLower)
 	}
 
 	type titleScore struct {
@@ -1062,58 +936,6 @@ func (si *SearchIndex) searchByTitleInternal(query string) ([]models.SearchResul
 	// If no results from index, fall back to scanning all notes from disk
 	if len(results) == 0 {
 		return si.searchTitleFromDisk(query)
-	}
-
-	return results, nil
-}
-
-// searchTitleByPrefixInternal is the internal version without lock
-func (si *SearchIndex) searchTitleByPrefixInternal(prefix string) ([]models.SearchResult, error) {
-	type titleScore struct {
-		notePath string
-		title    string
-		score    float64
-	}
-	var matches []titleScore
-	seen := make(map[string]bool)
-
-	prefixLower := strings.ToLower(prefix)
-
-	for term, entries := range si.titleIndex {
-		if strings.HasPrefix(term, prefixLower) {
-			for _, entry := range entries {
-				if seen[entry.NotePath] {
-					continue
-				}
-				seen[entry.NotePath] = true
-
-				score := si.calculateTitleScore(entry.Title, prefixLower)
-				if score == 0 {
-					score = si.calculateTitleScore(extractFileName(entry.NotePath), prefixLower)
-				}
-				matches = append(matches, titleScore{
-					notePath: entry.NotePath,
-					title:    entry.Title,
-					score:    score,
-				})
-			}
-		}
-	}
-
-	sort.SliceStable(matches, func(i, j int) bool {
-		return matches[i].score > matches[j].score
-	})
-
-	var results []models.SearchResult
-	for _, m := range matches {
-		result := si.buildTitleResult(m.notePath, m.title, prefix)
-		result.Score = m.score
-		results = append(results, result)
-	}
-
-	// If no results from index, fall back to scanning all notes from disk
-	if len(results) == 0 {
-		return si.searchTitleFromDisk(prefix)
 	}
 
 	return results, nil

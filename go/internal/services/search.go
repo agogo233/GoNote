@@ -32,16 +32,20 @@ func NewSearchService(notesDir string, noteService ...*NoteService) *SearchServi
 }
 
 // getOrCompileRegex 从缓存中获取已编译的正则，避免热路径上反复编译。
-func (s *SearchService) getOrCompileRegex(pattern string) (*regexp.Regexp, error) {
-	if cached, ok := s.regexCache.Load(pattern); ok {
+func getOrCompileRegex(cache *sync.Map, pattern string) (*regexp.Regexp, error) {
+	if cached, ok := cache.Load(pattern); ok {
 		return cached.(*regexp.Regexp), nil
 	}
 	re, err := regexp.Compile(pattern)
 	if err != nil {
 		return nil, err
 	}
-	s.regexCache.Store(pattern, re)
+	cache.Store(pattern, re)
 	return re, nil
+}
+
+func (s *SearchService) getOrCompileRegex(pattern string) (*regexp.Regexp, error) {
+	return getOrCompileRegex(&s.regexCache, pattern)
 }
 
 // Search performs full-text search through note contents
