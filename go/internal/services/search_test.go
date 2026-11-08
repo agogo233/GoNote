@@ -1,9 +1,11 @@
 package services
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -261,4 +263,23 @@ func TestReadFileContentNotFound(t *testing.T) {
 	_, err := readFileContent("/nonexistent/path/file.txt")
 
 	assert.Error(t, err)
+}
+
+func TestGetOrCompileRegex_Bounded(t *testing.T) {
+	cache := NewCache(100, time.Minute)
+
+	for i := 0; i < 150; i++ {
+		pattern := fmt.Sprintf("(?i)pattern-%d", i)
+		re, err := getOrCompileRegex(cache, pattern)
+		require.NoError(t, err)
+		assert.Equal(t, pattern, re.String())
+	}
+
+	assert.LessOrEqual(t, cache.Len(), 100, "regex 缓存必须有界，超过容量应 LRU 淘汰")
+
+	re1, err := getOrCompileRegex(cache, "(?i)pattern-0")
+	require.NoError(t, err)
+	re2, err := getOrCompileRegex(cache, "(?i)pattern-0")
+	require.NoError(t, err)
+	assert.Same(t, re1, re2, "相同 pattern 二次调用应命中缓存返回同一实例")
 }

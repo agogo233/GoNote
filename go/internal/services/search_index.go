@@ -43,7 +43,7 @@ type SearchIndex struct {
 
 	buildDone atomic.Bool // 标记 BuildIndex 是否至少完成一次（用于 /readyz）
 
-	regexCache sync.Map // map[string]*regexp.Regexp, 避免热路径上反复编译
+	regexCache *Cache // *regexp.Regexp, 避免热路径上反复编译；LRU+TTL 有界
 }
 
 // TitleEntry represents a title match with score
@@ -68,13 +68,14 @@ func NewSearchIndex(notesDir string, noteService *NoteService) *SearchIndex {
 		noteTerms:     make(map[string]map[string]bool),
 		notesDir:      notesDir,
 		cache:         NewCache(10000, 15*time.Minute), // Cache index entries for 15 minutes
+		regexCache:    NewCache(regexCacheCapacity, regexCacheTTL),
 		noteService:   noteService,
 		searchService: NewSearchService(notesDir),
 	}
 }
 
 func (si *SearchIndex) getOrCompileRegex(pattern string) (*regexp.Regexp, error) {
-	return getOrCompileRegex(&si.regexCache, pattern)
+	return getOrCompileRegex(si.regexCache, pattern)
 }
 
 // BuildIndex builds the full search index from all notes
@@ -865,8 +866,8 @@ func (si *SearchIndex) buildSingleMatchResult(name, notePath, query string) mode
 }
 
 // buildFilenameResult builds a search result for filename/path matches.
-// Uses the filename (not content title) as the display name, and leaves
-// Matches empty so the frontend falls through to showing the folder path.
+// Uses the filename (not content title) as the display name, with a single
+// match context highlighting the filename on line 1.
 func (si *SearchIndex) buildFilenameResult(notePath string, query string) models.SearchResult {
 	return si.buildSingleMatchResult(extractFileName(notePath), notePath, query)
 }

@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"sync"
+	"time"
 
 	"gonote/internal/models"
 )
@@ -14,38 +14,47 @@ import (
 // ContextWindowSize is the number of characters shown before and after a match in search results
 const ContextWindowSize = 50
 
+const (
+	regexCacheCapacity = 1000
+	regexCacheTTL      = 15 * time.Minute
+)
+
 // SearchService handles search operations
 type SearchService struct {
 	notesDir    string
 	noteService *NoteService
-	regexCache  sync.Map
-}
-
-// NewSearchService creates a new SearchService.
-// Pass a shared *NoteService to leverage caching; omit or pass nil to create a new one per search.
-func NewSearchService(notesDir string, noteService ...*NoteService) *SearchService {
-	s := &SearchService{notesDir: notesDir}
-	if len(noteService) > 0 {
-		s.noteService = noteService[0]
-	}
-	return s
+	regexCache  *Cache
 }
 
 // getOrCompileRegex 从缓存中获取已编译的正则，避免热路径上反复编译。
-func getOrCompileRegex(cache *sync.Map, pattern string) (*regexp.Regexp, error) {
-	if cached, ok := cache.Load(pattern); ok {
+// 底层为 LRU+TTL 缓存，容量有界，防止任意查询导致的无界内存增长。
+func getOrCompileRegex(cache *Cache, pattern string) (*regexp.Regexp, error) {
+	if cached, ok := cache.Get(pattern); ok {
 		return cached.(*regexp.Regexp), nil
 	}
 	re, err := regexp.Compile(pattern)
 	if err != nil {
 		return nil, err
 	}
-	cache.Store(pattern, re)
+	cache.Set(pattern, re)
 	return re, nil
 }
 
+// NewSearchService creates a new SearchService.
+// Pass a shared *NoteService to leverage caching; omit or pass nil to create a new one per search.
+func NewSearchService(notesDir string, noteService ...*NoteService) *SearchService {
+	s := &SearchService{
+		notesDir:   notesDir,
+		regexCache: NewCache(regexCacheCapacity, regexCacheTTL),
+	}
+	if len(noteService) > 0 {
+		s.noteService = noteService[0]
+	}
+	return s
+}
+
 func (s *SearchService) getOrCompileRegex(pattern string) (*regexp.Regexp, error) {
-	return getOrCompileRegex(&s.regexCache, pattern)
+	return getOrCompileRegex(s.regexCache, pattern)
 }
 
 // Search performs full-text search through note contents
