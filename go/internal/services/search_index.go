@@ -834,16 +834,12 @@ func (si *SearchIndex) calculateFilenameScore(pathLower, fileNameLower, queryLow
 	return 40.0
 }
 
-// buildFilenameResult builds a search result for filename/path matches.
-// Uses the filename (not content title) as the display name, and leaves
-// Matches empty so the frontend falls through to showing the folder path.
-func (si *SearchIndex) buildFilenameResult(notePath string, query string) models.SearchResult {
-	name := extractFileName(notePath)
+// buildSingleMatchResult builds a search result with a single highlighted match on line 1.
+func (si *SearchIndex) buildSingleMatchResult(name, notePath, query string) models.SearchResult {
 	folder := filepath.Dir(notePath)
 	if folder == "." {
 		folder = ""
 	}
-	fileType := getFileType(notePath)
 
 	context := name
 	if query != "" {
@@ -858,7 +854,7 @@ func (si *SearchIndex) buildFilenameResult(notePath string, query string) models
 		Name:   name,
 		Path:   notePath,
 		Folder: folder,
-		Type:   fileType,
+		Type:   getFileType(notePath),
 		Matches: []models.MatchContext{
 			{
 				LineNumber: 1,
@@ -866,6 +862,13 @@ func (si *SearchIndex) buildFilenameResult(notePath string, query string) models
 			},
 		},
 	}
+}
+
+// buildFilenameResult builds a search result for filename/path matches.
+// Uses the filename (not content title) as the display name, and leaves
+// Matches empty so the frontend falls through to showing the folder path.
+func (si *SearchIndex) buildFilenameResult(notePath string, query string) models.SearchResult {
+	return si.buildSingleMatchResult(extractFileName(notePath), notePath, query)
 }
 
 // searchByTitleInternal is the internal version without lock (caller holds lock)
@@ -990,35 +993,7 @@ func (si *SearchIndex) searchInternal(query string) ([]models.SearchResult, erro
 
 // buildTitleResult builds a search result for title-only matches
 func (si *SearchIndex) buildTitleResult(notePath string, title string, query string) models.SearchResult {
-	folder := filepath.Dir(notePath)
-	if folder == "." {
-		folder = ""
-	}
-
-	fileType := getFileType(notePath)
-
-	// Create a match context showing the title is matched
-	context := title
-	if query != "" {
-		escapedQuery := regexp.QuoteMeta(query)
-		pattern, err := si.getOrCompileRegex("(?i)" + escapedQuery)
-		if err == nil {
-			context = pattern.ReplaceAllString(title, "<mark class=\"search-highlight\">$0</mark>")
-		}
-	}
-
-	return models.SearchResult{
-		Name:   title,
-		Path:   notePath,
-		Folder: folder,
-		Type:   fileType,
-		Matches: []models.MatchContext{
-			{
-				LineNumber: 1,
-				Context:    context,
-			},
-		},
-	}
+	return si.buildSingleMatchResult(title, notePath, query)
 }
 
 // contentContainsAllKeywords verifies that note content contains all query keywords

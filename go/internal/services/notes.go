@@ -67,15 +67,7 @@ type contentCacheEntry struct {
 }
 
 func NewNoteService(notesDir string) *NoteService {
-	return &NoteService{
-		notesDir:     notesDir,
-		cache:        NewCache(DefaultCapacity, DefaultTTL),
-		tagCache:     NewCache(DefaultCapacity, DefaultTTL),
-		scanInterval: 30 * time.Second,
-		stopScanner:  nil, // No background scanner
-		scanTrigger:  nil,
-		ready:        nil, // nil means no background scanner, Skip WaitForReady
-	}
+	return NewNoteServiceWithCache(notesDir, DefaultTTL, DefaultCapacity)
 }
 
 func NewNoteServiceWithCache(notesDir string, cacheTTL time.Duration, cacheCapacity int) *NoteService {
@@ -162,107 +154,11 @@ func (s *NoteService) ScanNotes(includeMedia bool) ([]models.Note, []string, err
 
 // doScan performs the actual scan logic and returns notes and folders
 func (s *NoteService) doScan(includeMedia bool) ([]models.Note, []string) {
-	var notes []models.Note
-	foldersSet := make(map[string]bool)
-	var walkErrors []string
-
-	filepath.WalkDir(s.notesDir, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			// Log walk errors instead of silently ignoring
-			walkErrors = append(walkErrors, fmt.Sprintf("WalkDir error at %s: %v", path, err))
-			return nil // Continue walking despite errors
-		}
-
-		// Skip dot directories
-		if d.IsDir() && strings.HasPrefix(d.Name(), ".") {
-			return fs.SkipDir
-		}
-
-		// Skip dot files
-		if strings.HasPrefix(d.Name(), ".") {
-			return nil
-		}
-
-		relPath, err := filepath.Rel(s.notesDir, path)
-		if err != nil {
-			return nil
-		}
-
-		if d.IsDir() {
-			// Add folder
-			if relPath != "." {
-				foldersSet[ToPosixPath(relPath)] = true
-			}
-			return nil
-		}
-
-		// Process files
-		ext := strings.ToLower(filepath.Ext(path))
-		isMarkdown := ext == ".md"
-		mediaType := GetMediaType(d.Name())
-		shouldInclude := isMarkdown || (includeMedia && mediaType != "")
-
-		if !shouldInclude {
-			return nil
-		}
-
-		info, err := d.Info()
-		if err != nil {
-			return nil
-		}
-
-		folder := ToPosixPath(filepath.Dir(relPath))
-		if folder == "." {
-			folder = ""
-		}
-
-		// Get tags for markdown files
-		var tags []string
-		if isMarkdown {
-			tags = s.GetTagsCached(path)
-		}
-
-		noteType := "note"
-		if mediaType != "" {
-			noteType = mediaType
-		}
-
-		notes = append(notes, models.Note{
-			Name:     strings.TrimSuffix(d.Name(), filepath.Ext(d.Name())),
-			Path:     ToPosixPath(relPath),
-			Folder:   folder,
-			Modified: info.ModTime().UTC().Format(time.RFC3339Nano),
-			Size:     info.Size(),
-			Type:     noteType,
-			Tags:     tags,
-		})
-
-		return nil
-	})
-
-	// Log walk errors if any
-	if len(walkErrors) > 0 {
-		for _, errMsg := range walkErrors[:min(len(walkErrors), 10)] {
-			logger.Warnf("Warning: %s", errMsg)
-		}
-		if len(walkErrors) > 10 {
-			logger.Warnf("Warning: ... and %d more walk errors", len(walkErrors)-10)
-		}
+	allNotes, notesOnly, folders := s.doScanBoth()
+	if includeMedia {
+		return allNotes, folders
 	}
-
-	// Sort notes by modified date (newest first)
-	sort.Slice(notes, func(i, j int) bool {
-		return notes[i].Modified > notes[j].Modified
-	})
-
-	// Convert folders set to sorted slice
-	folders := make([]string, 0, len(foldersSet))
-	for f := range foldersSet {
-		folders = append(folders, f)
-	}
-	sort.Strings(folders)
-
-	return notes, folders
+	return notesOnly, folders
 }
 
 // doScanBoth 在一次 WalkDir 内同时返回含媒体与不含媒体的笔记列表，避免重复遍历。
