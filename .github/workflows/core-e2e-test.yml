@@ -7,6 +7,10 @@ on:
       - 'shared/**'
       - 'tests/e2e/**'
 
+permissions:
+  contents: read
+  actions: write
+
 jobs:
   test:
     name: e2e shard ${{ matrix.shard }}/4
@@ -17,6 +21,13 @@ jobs:
       matrix:
         shard: [1, 2, 3, 4]
     steps:
+      - name: Delete old workflow runs
+        uses: Mattraks/delete-workflow-runs@v2
+        with:
+          token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          retain_days: 7
+          keep_minimum_runs: 3
       - uses: actions/checkout@v4
 
       - name: Setup Go
@@ -69,4 +80,4 @@ jobs:
         with:
           name: core-test-results-${{ matrix.shard }}
           path: playwright-report/
-          retention-days: 3
+          retention-days: 7

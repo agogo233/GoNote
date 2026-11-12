@@ -18,7 +18,7 @@ jobs:
         with:
           token: ${{ github.token }}
           repository: ${{ github.repository }}
-          retain_days: 0
+          retain_days: 7
           keep_minimum_runs: 3
 
       - name: 设置小写镜像名称和版本

@@ -31,6 +31,10 @@ on:
           - production
         default: 'local'
 
+permissions:
+  contents: read
+  actions: write
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -40,6 +44,13 @@ jobs:
       AUTHENTICATION_PASSWORD: test-admin-password
 
     steps:
+      - name: Delete old workflow runs
+        uses: Mattraks/delete-workflow-runs@v2
+        with:
+          token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          retain_days: 7
+          keep_minimum_runs: 3
       - uses: actions/checkout@v4
 
       - name: Setup Go
