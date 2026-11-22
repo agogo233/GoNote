@@ -3,6 +3,9 @@ package services
 import (
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -642,4 +645,111 @@ func TestSaveNoteWithCheck_SubSecondStaleMtime(t *testing.T) {
 	// 当前 mtime 完全一致 → 应通过
 	currentMtime := info.ModTime().UTC().Format(time.RFC3339Nano)
 	require.NoError(t, svc.SaveNoteWithCheck(notePath, "# v3", currentMtime))
+}
+
+// TestNoteService_TagsCacheInvalidation ensures that saving a note invalidates
+// its tag cache entry. The tag cache keys are absolute paths (as fed by the
+// scanner) while invalidation used to derive the key from the relative path,
+// so entries silently survived every save. Both sides must share one key space.
+func TestNoteService_TagsCacheInvalidation(t *testing.T) {
+	tmpDir := t.TempDir()
+	svc := NewNoteService(tmpDir)
+
+	require.NoError(t, svc.SaveNote("tagged.md", "# t\n\n#tag1\n"))
+
+	// Simulate the scanner populating the tag cache with the absolute-path key
+	info, err := os.Stat(filepath.Join(tmpDir, "tagged.md"))
+	require.NoError(t, err)
+	svc.SetTagsCached(filepath.Join(tmpDir, "tagged.md"), info.ModTime(), []string{"tag1"})
+	require.Equal(t, 1, svc.tagCache.Len())
+
+	// A subsequent save must invalidate the tag cache entry (same key space)
+	require.NoError(t, svc.SaveNote("tagged.md", "# t\n\n#tag2\n"))
+	assert.Equal(t, 0, svc.tagCache.Len(), "tag cache entry must be invalidated on save")
+}
+
+// TestNoteService_ConcurrentSaveDeleteMove exercises the package-wide
+// fileOpsMu. Concurrent save/move/delete on the same paths must not race
+// (run with -race) and must leave the note present somewhere consistent.
+func TestNoteService_ConcurrentSaveDeleteMove(t *testing.T) {
+	tmpDir := t.TempDir()
+	svc := NewNoteService(tmpDir)
+
+	require.NoError(t, svc.SaveNote("target.md", "# original"))
+
+	var wg sync.WaitGroup
+	stop := make(chan struct{})
+
+	// Writer: keeps saving the same note
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		i := 0
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			_ = svc.SaveNote("target.md", "# content "+strconv.Itoa(i))
+			i++
+		}
+	}()
+
+	// Mover: repeatedly moves the note back and forth
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			if svc.NoteExists("target.md") {
+				_ = svc.MoveNote("target.md", "moved.md")
+			} else if svc.NoteExists("moved.md") {
+				_ = svc.MoveNote("moved.md", "target.md")
+			}
+		}
+	}()
+
+	// Deleter: soft-deletes whichever path currently holds the note
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			if svc.NoteExists("target.md") {
+				_ = svc.DeleteNote("target.md")
+			} else if svc.NoteExists("moved.md") {
+				_ = svc.DeleteNote("moved.md")
+			}
+			time.Sleep(time.Millisecond)
+		}
+	}()
+
+	time.Sleep(200 * time.Millisecond)
+	close(stop)
+	wg.Wait()
+
+	// Race detection is the primary goal here (run with -race). A stronger
+	// "exactly one location" assertion cannot hold: the writer legitimately
+	// re-creates target.md after a move or delete (save is an upsert), so a
+	// note path and a .trash entry may coexist by design. We only assert that
+	// the note was never lost outright.
+	inNotes := svc.NoteExists("target.md") || svc.NoteExists("moved.md")
+	inTrash := false
+	for _, name := range []string{"target.md", "moved.md"} {
+		trashName := strings.ReplaceAll(name, "/", "__")
+		matches, _ := filepath.Glob(filepath.Join(tmpDir, ".trash", trashName+".*"))
+		if len(matches) > 0 {
+			inTrash = true
+		}
+	}
+	assert.True(t, inNotes || inTrash, "note must survive concurrent save/move/delete")
 }

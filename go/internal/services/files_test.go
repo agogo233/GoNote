@@ -254,8 +254,8 @@ func TestSanitizeFilename(t *testing.T) {
 			expected: "normal.md",
 		},
 		{
-			name:     "filename with less than",
-			input:    "file<name>.md",
+			name:  "filename with less than",
+			input: "file<name>.md",
 			// After replacement: file_name_.md -> collapse underscores -> file_name.md
 			expected: "file_name.md",
 		},
@@ -270,14 +270,14 @@ func TestSanitizeFilename(t *testing.T) {
 			expected: "file_name.md",
 		},
 		{
-			name:     "filename with question mark",
-			input:    "file?.md",
+			name:  "filename with question mark",
+			input: "file?.md",
 			// After replacement: file_.md -> trim underscores -> file.md
 			expected: "file.md",
 		},
 		{
-			name:     "filename with asterisk",
-			input:    "file*.md",
+			name:  "filename with asterisk",
+			input: "file*.md",
 			// After replacement: file_.md -> trim underscores -> file.md
 			expected: "file.md",
 		},
@@ -625,5 +625,58 @@ func TestToPosixPath(t *testing.T) {
 					tt.input, result, tt.expected)
 			}
 		})
+	}
+}
+
+// TestValidatePathSecurity_SymlinkEscape ensures a symlink inside the notes
+// directory pointing outside of it cannot bypass the containment check.
+func TestValidatePathSecurity_SymlinkEscape(t *testing.T) {
+	tmpDir := t.TempDir()
+	notesDir := filepath.Join(tmpDir, "notes")
+	if err := os.MkdirAll(notesDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	secretDir := filepath.Join(tmpDir, "secret")
+	if err := os.MkdirAll(secretDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(secretDir, "secret.txt"), []byte("top secret"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// symlink: notes/evil -> ../secret
+	if err := os.Symlink(secretDir, filepath.Join(notesDir, "evil")); err != nil {
+		t.Skipf("symlinks not supported on this platform: %v", err)
+	}
+
+	// A path through the symlink must be rejected even though its lexical
+	// form stays inside the notes directory.
+	if ValidatePathSecurity(notesDir, "evil/secret.txt") {
+		t.Error("path through symlink escaping notesDir should be rejected")
+	}
+	// A new note below the escaping symlink must be rejected as well, even
+	// though the intermediate directory does not exist yet.
+	if ValidatePathSecurity(notesDir, "evil/sub/new.md") {
+		t.Error("new note below escaping symlink should be rejected")
+	}
+	if ValidatePathSecurityAbs(notesDir, filepath.Join(notesDir, "evil", "secret.txt")) {
+		t.Error("absolute path through symlink escaping notesDir should be rejected")
+	}
+
+	// Regular paths inside the notes dir keep working
+	if err := os.WriteFile(filepath.Join(notesDir, "ok.md"), []byte("hi"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if !ValidatePathSecurity(notesDir, "ok.md") {
+		t.Error("existing regular note should be accepted")
+	}
+	// Not-yet-existing notes inside the notes dir are still allowed
+	if !ValidatePathSecurity(notesDir, "sub/new.md") {
+		t.Error("new note path inside notesDir should be accepted")
+	}
+	// Traversal remains rejected
+	if ValidatePathSecurity(notesDir, "../secret/secret.txt") {
+		t.Error("path traversal should be rejected")
 	}
 }

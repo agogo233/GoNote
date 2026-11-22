@@ -25,10 +25,10 @@ var noteAttachmentMediaRegex = regexp.MustCompile(`!\[\[([^\]|]+)(?:\|[^\]]+)?\]
 
 // Cache key prefixes for fine-grained invalidation
 const (
-	cachePrefixNotesList  = "notes:list"   // Note list cache
-	cachePrefixContent    = "content:"     // Single note content
-	cachePrefixTags       = "tags:"        // Single note tags
-	cachePrefixScan       = "scan:"        // Scan results (legacy, kept for compatibility)
+	cachePrefixNotesList = "notes:list" // Note list cache
+	cachePrefixContent   = "content:"   // Single note content
+	cachePrefixTags      = "tags:"      // Single note tags
+	cachePrefixScan      = "scan:"      // Scan results (legacy, kept for compatibility)
 )
 
 type NoteService struct {
@@ -37,14 +37,14 @@ type NoteService struct {
 	tagCache       *Cache
 	scanInterval   time.Duration
 	stopScanner    chan struct{}
-	scannerDone    chan struct{}  // Closed when scanner goroutine exits
-	scanTrigger    chan struct{}  // Trigger immediate scan
-	ready          chan struct{}  // Closed when first scan completes
-	onScanComplete func()         // Callback after scan completes (for WebSocket broadcast)
-	searchIndex    *SearchIndex   // 注入：performScan 增量同步搜索索引
-	linkIndex      *LinkIndex     // 注入：performScan 后重建链接索引
-	fileMtimes     sync.Map       // path → time.Time（已知 mtime 的 snapshot），用于增量同步
-	pathMu         sync.Map       // path → *sync.Mutex（per-path 写入串行锁）
+	scannerDone    chan struct{} // Closed when scanner goroutine exits
+	scanTrigger    chan struct{} // Trigger immediate scan
+	ready          chan struct{} // Closed when first scan completes
+	onScanComplete func()        // Callback after scan completes (for WebSocket broadcast)
+	searchIndex    *SearchIndex  // 注入：performScan 增量同步搜索索引
+	linkIndex      *LinkIndex    // 注入：performScan 后重建链接索引
+	fileMtimes     sync.Map      // path → time.Time（已知 mtime 的 snapshot），用于增量同步
+	pathMu         sync.Map      // path → *sync.Mutex（per-path 写入串行锁）
 	triggerMu      sync.Mutex
 	triggerTimer   *time.Timer
 	scanMu         sync.Mutex
@@ -360,6 +360,11 @@ func (s *NoteService) SaveNoteWithCheck(notePath, content, knownMtime string) er
 		return fmt.Errorf("invalid path")
 	}
 
+	// Serialize against delete/move/restore (which take fileOpsMu without a
+	// per-path lock). Lock order is always fileOpsMu -> per-path mutex.
+	fileOpsMu.Lock()
+	defer fileOpsMu.Unlock()
+
 	mu := s.getMu(notePath)
 	mu.Lock()
 	defer mu.Unlock()
@@ -397,6 +402,14 @@ func (s *NoteService) SaveNoteWithCheck(notePath, content, knownMtime string) er
 
 // DeleteNote deletes a note (soft delete: moves to .trash)
 func (s *NoteService) DeleteNote(notePath string) error {
+	// Serialize with saves/moves/restores: the existence check and rename
+	// must be atomic with respect to concurrent writes to the same note.
+	// (SaveNoteWithCheck previously held the per-path lock that this method
+	// never took, and the pathMu.Delete below would hand a new mutex to the
+	// next writer while old waiters still held the retired one.)
+	fileOpsMu.Lock()
+	defer fileOpsMu.Unlock()
+
 	fullPath := filepath.Join(s.notesDir, notePath)
 
 	if !ValidatePathSecurity(s.notesDir, notePath) {
@@ -431,6 +444,11 @@ func (s *NoteService) DeleteNote(notePath string) error {
 // 顺序：先 rename（可逆性差但失败无副作用），成功后再改 backlinks；
 // backlinks 改写失败时回滚 rename，避免出现"链接已改但文件没搬"的不可恢复状态。
 func (s *NoteService) MoveNote(oldPath, newPath string) error {
+	// Serialize with saves/deletes/restores: the existence checks, rename and
+	// backlink rewrite must be atomic with respect to concurrent note writes.
+	fileOpsMu.Lock()
+	defer fileOpsMu.Unlock()
+
 	oldFull := filepath.Join(s.notesDir, oldPath)
 	newFull := filepath.Join(s.notesDir, newPath)
 
@@ -455,7 +473,9 @@ func (s *NoteService) MoveNote(oldPath, newPath string) error {
 		return err
 	}
 
-	// 2) rename 成功后改 backlinks；失败则回滚 rename
+	// 2) rename 成功后改 backlinks。UpdateAllBacklinks 为尽力而为语义：
+	// 单条改写失败只记日志，因此这里仅在 FindBacklinks 本身失败时才返回
+	// error 并触发回滚（常规部分失败不会走到下面的回滚分支）。
 	backlinkService := NewBacklinkService(s.notesDir)
 	if _, err := backlinkService.UpdateAllBacklinks(oldPath, newPath); err != nil {
 		// 补偿：把文件搬回去，尽量恢复原状
@@ -605,6 +625,12 @@ func (s *NoteService) GetAttachments(notePath string) ([]models.Attachment, erro
 
 // SaveUploadedImage saves an uploaded image to the attachments directory
 func (s *NoteService) SaveUploadedImage(notePath, filename string, data []byte) (string, error) {
+	// Serialize with note moves/deletes: without this lock an upload could
+	// re-create a directory that MoveFolder just renamed away, leaving the
+	// attachment in a stale location.
+	fileOpsMu.Lock()
+	defer fileOpsMu.Unlock()
+
 	// Sanitize filename
 	sanitizedName := SanitizeFilename(filename)
 
@@ -642,13 +668,20 @@ func (s *NoteService) SaveUploadedImage(notePath, filename string, data []byte) 
 	return ToPosixPath(relPath), nil
 }
 
+// tagsCacheKey builds the tag cache key for a note file path.
+// Both lookups (GetTagsCached/SetTagsCached) and invalidation must use the
+// same absolute, POSIX-normalized key, otherwise Delete misses the entry.
+func tagsCacheKey(filePath string) string {
+	return cachePrefixTags + ToPosixPath(filePath)
+}
+
 // invalidateNoteCache invalidates cache entries related to a specific note
 // Only does fine-grained invalidation without triggering a full background scan.
 // The background scanner's periodic tick will handle full refresh.
 func (s *NoteService) invalidateNoteCache(notePath string) {
 	notePath = ToPosixPath(notePath)
 	s.cache.Delete(cachePrefixContent + notePath)
-	s.tagCache.Delete(cachePrefixTags + notePath)
+	s.tagCache.Delete(tagsCacheKey(filepath.Join(s.notesDir, notePath)))
 }
 
 func (s *NoteService) InvalidateCache() {
@@ -667,7 +700,7 @@ func (s *NoteService) GetTagsCached(filePath string) []string {
 		return nil
 	}
 
-	cacheKey := fmt.Sprintf("tags:%s", filePath)
+	cacheKey := tagsCacheKey(filePath)
 	if val, ok := s.tagCache.Get(cacheKey); ok {
 		if entry, ok := val.(*tagCacheEntry); ok {
 			if entry.ModifiedTime.Equal(info.ModTime()) {
@@ -694,7 +727,7 @@ func (s *NoteService) GetTagsCached(filePath string) []string {
 }
 
 func (s *NoteService) SetTagsCached(filePath string, mtime time.Time, tags []string) {
-	cacheKey := fmt.Sprintf("tags:%s", filePath)
+	cacheKey := tagsCacheKey(filePath)
 	s.tagCache.Set(cacheKey, &tagCacheEntry{
 		ModifiedTime: mtime,
 		Tags:         tags,
@@ -831,13 +864,11 @@ func (s *NoteService) performScan() {
 	// 增量同步搜索索引：基于 markdown 笔记列表做差分
 	s.syncSearchIndex(notesOnly)
 
-	// 重建链接索引（全量，在后台 goroutine 中异步执行，避免阻塞扫描流程）
+	// 重建链接索引（全量）。performScan 全程持有 scanMu，这里同步执行即可串行化，
+	// 避免并发重建导致的重复全盘扫描以及旧快照覆盖新快照；同时保证下方
+	// onScanComplete 广播触发时链接索引已经就绪。
 	if s.linkIndex != nil {
-		s.wg.Add(1)
-		go func() {
-			defer s.wg.Done()
-			s.linkIndex.RebuildFull()
-		}()
+		s.linkIndex.RebuildFull()
 	}
 
 	if s.onScanComplete != nil {
@@ -945,6 +976,11 @@ func (s *NoteService) ListTrashNotes() ([]string, error) {
 }
 
 func (s *NoteService) RestoreNote(trashName string) (string, error) {
+	// Serialize with saves/deletes/moves: restoring a file into the notes
+	// tree must not interleave with a concurrent save to the same path.
+	fileOpsMu.Lock()
+	defer fileOpsMu.Unlock()
+
 	trashDir := filepath.Join(s.notesDir, ".trash")
 	trashPath := filepath.Join(trashDir, trashName)
 
@@ -968,6 +1004,10 @@ func (s *NoteService) RestoreNote(trashName string) (string, error) {
 		return "", fmt.Errorf("failed to restore: %w", err)
 	}
 
+	// The restored note must become visible immediately, not on the next
+	// background scan tick.
+	s.invalidateNoteCache(originalPath)
+
 	return originalPath, nil
 }
 
@@ -979,4 +1019,3 @@ func (s *NoteService) WaitBackground(done chan struct{}) {
 	s.wg.Wait()
 	close(done)
 }
-

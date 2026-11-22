@@ -7,15 +7,30 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 )
 
 // 文件名清理用预编译正则
 var (
-	reFilenameDangerous = regexp.MustCompile(`[\\/:*?"<>|\x00-\x1f]`)
+	reFilenameDangerous  = regexp.MustCompile(`[\\/:*?"<>|\x00-\x1f]`)
 	reFilenameUnderscore = regexp.MustCompile(`_+`)
 )
 
-// ValidatePathSecurity ensures a path is within the notes directory
+// fileOpsMu serializes file-mutating note operations (save / delete / move /
+// restore) across the services package. NoteService methods and package-level
+// functions such as MoveFolder share this lock so that structural changes
+// cannot interleave with per-note saves. The per-path mutexes in NoteService
+// remain in place as an inner layer; always take fileOpsMu first.
+var fileOpsMu sync.Mutex
+
+// resolvedNotesDirs caches symlink-resolved notes directories. The notes
+// directory is fixed for the lifetime of the process, so it only has to be
+// resolved once per absolute path.
+var resolvedNotesDirs sync.Map // abs notesDir -> resolved notesDir
+
+// ValidatePathSecurity ensures a path is within the notes directory.
+// Symbolic links are resolved on both sides so that a symlink inside the
+// notes directory pointing outside of it cannot bypass the prefix check.
 func ValidatePathSecurity(notesDir, targetPath string) bool {
 	absNotesDir, err := filepath.Abs(notesDir)
 	if err != nil {
@@ -27,21 +42,66 @@ func ValidatePathSecurity(notesDir, targetPath string) bool {
 		return false
 	}
 
+	resolvedNotesDir := resolveNotesDir(absNotesDir)
+	resolvedTarget := resolveSymlinks(absTarget)
+
 	// Ensure the target is within notesDir by checking prefix with separator
 	// This prevents /app/data-backup from matching /app/data
-	if absTarget == absNotesDir {
+	if resolvedTarget == resolvedNotesDir {
 		return true
 	}
-	return strings.HasPrefix(absTarget, absNotesDir+string(filepath.Separator))
+	return strings.HasPrefix(resolvedTarget, resolvedNotesDir+string(filepath.Separator))
 }
 
-// ValidatePathSecurityAbs validates an already-absolute path
+// ValidatePathSecurityAbs validates an already-absolute path.
+// Symbolic links are resolved before the containment check (see
+// ValidatePathSecurity).
 func ValidatePathSecurityAbs(notesDir, absTarget string) bool {
 	absNotesDir, err := filepath.Abs(notesDir)
 	if err != nil {
 		return false
 	}
-	return IsPathInside(absTarget, absNotesDir)
+	resolvedNotesDir := resolveNotesDir(absNotesDir)
+	resolvedTarget := resolveSymlinks(absTarget)
+	return IsPathInside(resolvedTarget, resolvedNotesDir)
+}
+
+// resolveNotesDir returns the symlink-resolved notes directory, caching the
+// result per absolute path.
+func resolveNotesDir(absNotesDir string) string {
+	if resolved, ok := resolvedNotesDirs.Load(absNotesDir); ok {
+		return resolved.(string)
+	}
+	resolved := resolveSymlinks(absNotesDir)
+	resolvedNotesDirs.Store(absNotesDir, resolved)
+	return resolved
+}
+
+// resolveSymlinks resolves symbolic links in the longest existing prefix of
+// path. For not-yet-existing paths (e.g. a note about to be created) the
+// closest existing ancestor is resolved and the remaining elements are
+// appended unchanged, so symlinks along the existing part of the chain are
+// still taken into account.
+func resolveSymlinks(path string) string {
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		return resolved
+	}
+	parent := filepath.Dir(path)
+	for parent != path {
+		if resolvedParent, err := filepath.EvalSymlinks(parent); err == nil {
+			rel, err := filepath.Rel(parent, path)
+			if err != nil {
+				return path
+			}
+			return filepath.Join(resolvedParent, rel)
+		}
+		next := filepath.Dir(parent)
+		if next == parent {
+			break
+		}
+		parent = next
+	}
+	return path
 }
 
 // IsPathInside reports whether absTarget is equal to or nested under absParent.
@@ -132,6 +192,11 @@ func EnsureDirectories(dirs ...string) error {
 
 // CreateFolder creates a new folder in the notes directory
 func CreateFolder(notesDir, folderPath string) error {
+	// Serialize with note writes: creating directories must not interleave
+	// with moves/deletes of the same subtree.
+	fileOpsMu.Lock()
+	defer fileOpsMu.Unlock()
+
 	fullPath := filepath.Join(notesDir, folderPath)
 
 	// Security check
@@ -144,6 +209,11 @@ func CreateFolder(notesDir, folderPath string) error {
 
 // DeleteFolder deletes a folder and all its contents
 func DeleteFolder(notesDir, folderPath string) error {
+	// Serialize with note writes: RemoveAll must not run concurrently with
+	// saves into the same subtree.
+	fileOpsMu.Lock()
+	defer fileOpsMu.Unlock()
+
 	fullPath := filepath.Join(notesDir, folderPath)
 
 	// Security check
@@ -167,6 +237,11 @@ func DeleteFolder(notesDir, folderPath string) error {
 // 顺序：先 rename 成功后再更新 folder 内所有 wikilinks 反向引用，
 // backlinks 改写失败时回滚 rename，避免出现"链接已改但目录没搬"的不可恢复状态。
 func MoveFolder(notesDir, oldPath, newPath string) error {
+	// Serialize with saves/deletes/restores: the existence checks and rename
+	// must be atomic with respect to concurrent note writes.
+	fileOpsMu.Lock()
+	defer fileOpsMu.Unlock()
+
 	oldFull := filepath.Join(notesDir, oldPath)
 	newFull := filepath.Join(notesDir, newPath)
 
