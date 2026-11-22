@@ -5,6 +5,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"gonote/internal/models/logger"
 )
 
 // Default values for Cache
@@ -22,10 +24,10 @@ type Cache struct {
 	capacity        int
 	ttl             time.Duration
 	cleanupInterval time.Duration
-	stopMu          sync.Mutex      // Protects stopCleanup channel operations
+	stopMu          sync.Mutex // Protects stopCleanup channel operations
 	stopCleanup     chan struct{}
-	cleanupDone     chan struct{}   // Signaled when cleanup goroutine exits
-	cleanupRunning  bool            // Track if cleanup goroutine is running
+	cleanupDone     chan struct{} // Signaled when cleanup goroutine exits
+	cleanupRunning  bool          // Track if cleanup goroutine is running
 }
 
 // cacheEntry holds the cached value and expiration time
@@ -93,7 +95,8 @@ func (c *Cache) Set(key string, value interface{}) {
 // Get retrieves a value from the cache.
 // Returns (value, true) if found and not expired, (nil, false) otherwise.
 // Thread-safe for concurrent use.
-// Uses RLock for hot path to avoid serializing concurrent reads (I-2).
+// Uses RLock for the lookup fast path to avoid serializing concurrent reads
+// (I-2); on a hit the entry is promoted (LRU touch) under a short write lock.
 func (c *Cache) Get(key string) (interface{}, bool) {
 	c.mu.RLock()
 	elem, ok := c.items[key]
@@ -118,6 +121,18 @@ func (c *Cache) Get(key string) (interface{}, bool) {
 	}
 	val := entry.value
 	c.mu.RUnlock()
+
+	// LRU touch: move the hit entry to the back (most recently used) so
+	// eviction truly evicts the least recently used item instead of behaving
+	// like FIFO. The entry is re-looked-up by key because it may have been
+	// removed or replaced between releasing the read lock and taking the
+	// write lock (never touch the stale elem pointer directly).
+	c.mu.Lock()
+	if elem, ok := c.items[key]; ok {
+		c.evictList.MoveToBack(elem)
+	}
+	c.mu.Unlock()
+
 	return val, true
 }
 
@@ -215,8 +230,10 @@ func (c *Cache) StartCleanup() {
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
-				// Log the panic - cleanup will stop but cache remains functional.
-				// This prevents a panic in cleanup from crashing the server.
+				// Last-resort guard: log the panic. Per-tick recovery below
+				// normally keeps the goroutine alive; this only catches a
+				// panic outside the tick handler itself.
+				logger.Errorf("[cache] cleanup goroutine panic: %v", r)
 			}
 		}()
 		ticker := time.NewTicker(c.cleanupInterval)
@@ -229,10 +246,22 @@ func (c *Cache) StartCleanup() {
 				close(c.cleanupDone)
 				return
 			case <-ticker.C:
-				c.cleanup()
+				c.runCleanupSafely()
 			}
 		}
 	}()
+}
+
+// runCleanupSafely runs a single cleanup pass, recovering from any panic so
+// the cleanup goroutine keeps running for the lifetime of the cache instead
+// of silently dying (which also left StopCleanup waiting on its 5s timeout).
+func (c *Cache) runCleanupSafely() {
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Errorf("[cache] cleanup pass panic recovered: %v", r)
+		}
+	}()
+	c.cleanup()
 }
 
 // StopCleanup stops the background cleanup goroutine.
