@@ -10,15 +10,46 @@ import (
 	"gonote/internal/models/logger"
 )
 
+// wsSendBuffer is the per-connection outgoing queue size (in messages).
+const wsSendBuffer = 64
+
+// wsWriteTimeout bounds a single socket write so a stalled client only
+// affects its own delivery, never the fan-out to other clients.
+const wsWriteTimeout = 5 * time.Second
+
 // WSMessage represents a WebSocket message sent to clients
 type WSMessage struct {
 	Type    string      `json:"type"`    // "notes_updated", "folders_updated", etc.
 	Payload interface{} `json:"payload"` // Optional payload data
 }
 
+// wsClient wraps a WebSocket connection with its own outbound queue and
+// writer goroutine. Broadcasts only enqueue onto the queue (non-blocking),
+// so one slow client cannot stall the manager or the other clients.
+type wsClient struct {
+	conn      *websocket.Conn
+	send      chan []byte
+	done      chan struct{} // closed when the client is removed
+	closeOnce sync.Once
+}
+
+// close idempotently signals the writer goroutine to stop and closes the
+// underlying connection. The send channel is deliberately never closed so
+// concurrent broadcasters can never panic on a send-to-closed-channel.
+func (c *wsClient) close() {
+	c.closeOnce.Do(func() {
+		if c.done != nil {
+			close(c.done)
+		}
+		if c.conn != nil {
+			c.conn.Close()
+		}
+	})
+}
+
 // WSManager manages WebSocket connections and broadcasts
 type WSManager struct {
-	connections    map[*websocket.Conn]bool
+	clients        map[*websocket.Conn]*wsClient
 	mu             sync.RWMutex
 	broadcast      chan WSMessage
 	register       chan *websocket.Conn
@@ -32,7 +63,7 @@ type WSManager struct {
 // InitWSManager initializes and returns a new WebSocket manager
 func InitWSManager(maxConnections int) *WSManager {
 	wm := &WSManager{
-		connections:    make(map[*websocket.Conn]bool),
+		clients:        make(map[*websocket.Conn]*wsClient),
 		broadcast:      make(chan WSMessage, 100),
 		register:       make(chan *websocket.Conn, 10),
 		unregister:     make(chan *websocket.Conn, 10),
@@ -59,11 +90,13 @@ func (m *WSManager) Stop() {
 		m.mu.Lock()
 		m.stopped = true
 		// Close all remaining connections
-		for conn := range m.connections {
-			if conn != nil {
+		for conn, client := range m.clients {
+			if client != nil {
+				client.close()
+			} else if conn != nil {
 				conn.Close()
 			}
-			delete(m.connections, conn)
+			delete(m.clients, conn)
 		}
 		m.mu.Unlock()
 
@@ -82,20 +115,38 @@ func (m *WSManager) run() {
 
 		case conn := <-m.register:
 			m.mu.Lock()
-			m.connections[conn] = true
+			// Defensive: a re-registered connection replaces any stale entry
+			// so the old writer goroutine cannot leak.
+			if old, ok := m.clients[conn]; ok && old != nil {
+				old.close()
+			}
+			client := &wsClient{
+				conn: conn,
+				send: make(chan []byte, wsSendBuffer),
+				done: make(chan struct{}),
+			}
+			m.clients[conn] = client
+			total := len(m.clients)
 			m.mu.Unlock()
-			logger.Printf("WebSocket client connected. Total: %d", len(m.connections))
+			go m.writePump(client)
+			logger.Printf("WebSocket client connected. Total: %d", total)
 
 		case conn := <-m.unregister:
 			m.mu.Lock()
-			if _, ok := m.connections[conn]; ok {
-				delete(m.connections, conn)
-				if conn != nil {
+			client, ok := m.clients[conn]
+			if ok {
+				delete(m.clients, conn)
+			}
+			total := len(m.clients)
+			m.mu.Unlock()
+			if ok {
+				if client != nil {
+					client.close()
+				} else if conn != nil {
 					conn.Close()
 				}
 			}
-			m.mu.Unlock()
-			logger.Printf("WebSocket client disconnected. Total: %d", len(m.connections))
+			logger.Printf("WebSocket client disconnected. Total: %d", total)
 
 		case msg := <-m.broadcast:
 			m.broadcastMessage(msg)
@@ -103,57 +154,73 @@ func (m *WSManager) run() {
 	}
 }
 
-// broadcastMessage sends a message to all connected clients.
-// JSON serialization is done outside the lock to minimize lock hold time.
+// writePump drains the per-connection outbound queue. It exits when the
+// client is removed (done closed) or a write fails.
+func (m *WSManager) writePump(client *wsClient) {
+	for {
+		select {
+		case <-client.done:
+			return
+		case data := <-client.send:
+			client.conn.SetWriteDeadline(time.Now().Add(wsWriteTimeout))
+			if err := client.conn.WriteMessage(websocket.TextMessage, data); err != nil {
+				m.removeClient(client.conn)
+				return
+			}
+		}
+	}
+}
+
+// removeClient idempotently removes and closes a client by its connection.
+func (m *WSManager) removeClient(conn *websocket.Conn) {
+	m.mu.Lock()
+	client, ok := m.clients[conn]
+	if ok {
+		delete(m.clients, conn)
+	}
+	m.mu.Unlock()
+	if ok && client != nil {
+		client.close()
+	}
+}
+
+// broadcastMessage enqueues a message to every connected client without
+// blocking. Each client has its own buffered queue; a client whose queue is
+// full (slow consumer) simply misses this message instead of stalling the
+// fan-out for everyone else. JSON serialization happens once, outside the
+// lock.
 func (m *WSManager) broadcastMessage(msg WSMessage) {
-	// Serialize message outside of lock
 	data, err := json.Marshal(msg)
 	if err != nil {
 		logger.Printf("WebSocket: failed to marshal message: %v", err)
 		return
 	}
 
-	// Get a snapshot of connections under read lock
+	// Snapshot the clients under read lock
 	m.mu.RLock()
-	// Early exit if no connections
-	if len(m.connections) == 0 {
+	if len(m.clients) == 0 {
 		m.mu.RUnlock()
 		return
 	}
-	
-	// Copy connections to slice for iteration outside lock
-	conns := make([]*websocket.Conn, 0, len(m.connections))
-	for conn := range m.connections {
-		conns = append(conns, conn)
+	clients := make([]*wsClient, 0, len(m.clients))
+	for _, client := range m.clients {
+		if client != nil {
+			clients = append(clients, client)
+		}
 	}
 	m.mu.RUnlock()
 
-	// Send messages without holding the lock
-	var failedConns []*websocket.Conn
-	for _, conn := range conns {
-		// Skip nil connections (defensive)
-		if conn == nil {
-			continue
+	// Enqueue without holding the lock; never block on a slow client
+	dropped := 0
+	for _, client := range clients {
+		select {
+		case client.send <- data:
+		default:
+			dropped++
 		}
-		// Set write deadline to prevent blocking on slow clients
-		conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
-		if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
-			failedConns = append(failedConns, conn)
-		}
-		conn.SetWriteDeadline(time.Time{}) // Reset deadline
 	}
-
-	// Remove failed connections with write lock
-	if len(failedConns) > 0 {
-		m.mu.Lock()
-		for _, conn := range failedConns {
-			if conn != nil {
-				conn.Close()
-			}
-			delete(m.connections, conn)
-		}
-		m.mu.Unlock()
-		logger.Printf("WebSocket: removed %d failed connections", len(failedConns))
+	if dropped > 0 {
+		logger.Printf("WebSocket: dropped message for %d slow client(s)", dropped)
 	}
 }
 
@@ -181,7 +248,7 @@ func (m *WSManager) Register(conn *websocket.Conn) bool {
 		return false
 	}
 	// Check connection limit (0 = unlimited)
-	if m.maxConnections > 0 && len(m.connections) >= m.maxConnections {
+	if m.maxConnections > 0 && len(m.clients) >= m.maxConnections {
 		m.mu.RUnlock()
 		return false
 	}
@@ -221,13 +288,8 @@ func (m *WSManager) Unregister(conn *websocket.Conn) {
 	case <-m.stop:
 		// Manager stopping, connection will be closed by Stop()
 	default:
-		// Channel full, close connection directly
-		m.mu.Lock()
-		if _, ok := m.connections[conn]; ok {
-			delete(m.connections, conn)
-			conn.Close()
-		}
-		m.mu.Unlock()
+		// Channel full, remove the client directly
+		m.removeClient(conn)
 	}
 }
 

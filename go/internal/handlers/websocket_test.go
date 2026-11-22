@@ -17,14 +17,14 @@ func TestWSManager_InitAndStop(t *testing.T) {
 	if manager == nil {
 		t.Fatal("InitWSManager returned nil")
 	}
-	
+
 	// Stop should not panic when called once
 	manager.Stop()
-	
+
 	// Stop should be idempotent (safe to call multiple times)
 	manager.Stop()
 	manager.Stop()
-	
+
 	// Verify stopped flag
 	if !manager.stopped {
 		t.Error("manager should be marked as stopped")
@@ -33,18 +33,18 @@ func TestWSManager_InitAndStop(t *testing.T) {
 
 func TestWSManager_RegisterAfterStop(t *testing.T) {
 	manager := &WSManager{
-		connections: make(map[*websocket.Conn]bool),
-		broadcast:   make(chan WSMessage, 100),
-		register:    make(chan *websocket.Conn, 10),
-		unregister:  make(chan *websocket.Conn, 10),
-		stop:        make(chan struct{}),
+		clients:        make(map[*websocket.Conn]*wsClient),
+		broadcast:      make(chan WSMessage, 100),
+		register:       make(chan *websocket.Conn, 10),
+		unregister:     make(chan *websocket.Conn, 10),
+		stop:           make(chan struct{}),
 		maxConnections: 0,
 	}
 	go manager.run()
-	
+
 	// Stop the manager
 	manager.Stop()
-	
+
 	// Register should return false after stop
 	result := manager.Register(nil)
 	if result {
@@ -54,11 +54,11 @@ func TestWSManager_RegisterAfterStop(t *testing.T) {
 
 func TestWSManager_RegisterNil(t *testing.T) {
 	manager := &WSManager{
-		connections: make(map[*websocket.Conn]bool),
-		broadcast:   make(chan WSMessage, 100),
-		register:    make(chan *websocket.Conn, 10),
-		unregister:  make(chan *websocket.Conn, 10),
-		stop:        make(chan struct{}),
+		clients:        make(map[*websocket.Conn]*wsClient),
+		broadcast:      make(chan WSMessage, 100),
+		register:       make(chan *websocket.Conn, 10),
+		unregister:     make(chan *websocket.Conn, 10),
+		stop:           make(chan struct{}),
 		maxConnections: 0,
 	}
 	go manager.run()
@@ -73,7 +73,7 @@ func TestWSManager_RegisterNil(t *testing.T) {
 
 func TestWSManager_UnregisterAfterStop(t *testing.T) {
 	manager := &WSManager{
-		connections:    make(map[*websocket.Conn]bool),
+		clients:        make(map[*websocket.Conn]*wsClient),
 		broadcast:      make(chan WSMessage, 100),
 		register:       make(chan *websocket.Conn, 10),
 		unregister:     make(chan *websocket.Conn, 10),
@@ -81,17 +81,17 @@ func TestWSManager_UnregisterAfterStop(t *testing.T) {
 		maxConnections: 0,
 	}
 	go manager.run()
-	
+
 	// Stop the manager
 	manager.Stop()
-	
+
 	// Unregister should not panic after stop (no-op)
 	manager.Unregister(nil)
 }
 
 func TestWSManager_BroadcastNonBlocking(t *testing.T) {
 	manager := &WSManager{
-		connections:    make(map[*websocket.Conn]bool),
+		clients:        make(map[*websocket.Conn]*wsClient),
 		broadcast:      make(chan WSMessage, 100),
 		register:       make(chan *websocket.Conn, 10),
 		unregister:     make(chan *websocket.Conn, 10),
@@ -100,14 +100,14 @@ func TestWSManager_BroadcastNonBlocking(t *testing.T) {
 	}
 	go manager.run()
 	defer manager.Stop()
-	
+
 	// Broadcast should not block even with no connections
 	done := make(chan bool, 1)
 	go func() {
 		manager.Broadcast("test", nil)
 		done <- true
 	}()
-	
+
 	select {
 	case <-done:
 		// Good - didn't block
@@ -118,27 +118,27 @@ func TestWSManager_BroadcastNonBlocking(t *testing.T) {
 
 func TestWSManager_BroadcastChannelFull(t *testing.T) {
 	manager := &WSManager{
-		connections: make(map[*websocket.Conn]bool),
-		broadcast:   make(chan WSMessage, 2), // Small buffer
-		register:    make(chan *websocket.Conn, 10),
-		unregister:  make(chan *websocket.Conn, 10),
-		stop:        make(chan struct{}),
+		clients:    make(map[*websocket.Conn]*wsClient),
+		broadcast:  make(chan WSMessage, 2), // Small buffer
+		register:   make(chan *websocket.Conn, 10),
+		unregister: make(chan *websocket.Conn, 10),
+		stop:       make(chan struct{}),
 	}
-	
+
 	// Don't start run() - so channel will fill up
-	
+
 	// Fill the channel
 	for i := 0; i < 2; i++ {
 		manager.Broadcast("test", nil)
 	}
-	
+
 	// This should not block (non-blocking send with default case)
 	done := make(chan bool, 1)
 	go func() {
 		manager.Broadcast("overflow", nil) // Should hit default case
 		done <- true
 	}()
-	
+
 	select {
 	case <-done:
 		// Good - didn't block
@@ -149,25 +149,25 @@ func TestWSManager_BroadcastChannelFull(t *testing.T) {
 
 func TestWSManager_ConcurrentRegister(t *testing.T) {
 	manager := &WSManager{
-		connections: make(map[*websocket.Conn]bool),
-		broadcast:   make(chan WSMessage, 100),
-		register:    make(chan *websocket.Conn, 100), // Large enough buffer
-		unregister:  make(chan *websocket.Conn, 10),
-		stop:        make(chan struct{}),
+		clients:    make(map[*websocket.Conn]*wsClient),
+		broadcast:  make(chan WSMessage, 100),
+		register:   make(chan *websocket.Conn, 100), // Large enough buffer
+		unregister: make(chan *websocket.Conn, 10),
+		stop:       make(chan struct{}),
 	}
 	go manager.run()
 	defer manager.Stop()
-	
+
 	// Wait for manager to start
 	time.Sleep(10 * time.Millisecond)
-	
+
 	// Note: Register rejects nil connections, so this tests the channel behavior
 	// not actual connection handling. Real connections would be real websocket.Conn objects.
-	
+
 	// Test concurrent register calls that would fail due to nil check
 	var wg sync.WaitGroup
 	numGoroutines := 50
-	
+
 	// Concurrently try to register nil (should all return false immediately)
 	for i := 0; i < numGoroutines; i++ {
 		wg.Add(1)
@@ -180,14 +180,14 @@ func TestWSManager_ConcurrentRegister(t *testing.T) {
 			}
 		}()
 	}
-	
+
 	// Wait with timeout
 	done := make(chan struct{})
 	go func() {
 		wg.Wait()
 		close(done)
 	}()
-	
+
 	select {
 	case <-done:
 		// Good - all goroutines completed
@@ -198,18 +198,18 @@ func TestWSManager_ConcurrentRegister(t *testing.T) {
 
 func TestWSManager_ConcurrentBroadcast(t *testing.T) {
 	manager := &WSManager{
-		connections: make(map[*websocket.Conn]bool),
-		broadcast:   make(chan WSMessage, 100),
-		register:    make(chan *websocket.Conn, 10),
-		unregister:  make(chan *websocket.Conn, 10),
-		stop:        make(chan struct{}),
+		clients:    make(map[*websocket.Conn]*wsClient),
+		broadcast:  make(chan WSMessage, 100),
+		register:   make(chan *websocket.Conn, 10),
+		unregister: make(chan *websocket.Conn, 10),
+		stop:       make(chan struct{}),
 	}
 	go manager.run()
 	defer manager.Stop()
-	
+
 	var wg sync.WaitGroup
 	numBroadcasts := 100
-	
+
 	// Concurrently broadcast
 	for i := 0; i < numBroadcasts; i++ {
 		wg.Add(1)
@@ -218,14 +218,14 @@ func TestWSManager_ConcurrentBroadcast(t *testing.T) {
 			manager.Broadcast("test", map[string]int{"n": n})
 		}(i)
 	}
-	
+
 	// Wait with timeout
 	done := make(chan struct{})
 	go func() {
 		wg.Wait()
 		close(done)
 	}()
-	
+
 	select {
 	case <-done:
 		// Good
@@ -236,20 +236,20 @@ func TestWSManager_ConcurrentBroadcast(t *testing.T) {
 
 func TestWSManager_StopDuringRegister(t *testing.T) {
 	manager := &WSManager{
-		connections: make(map[*websocket.Conn]bool),
-		broadcast:   make(chan WSMessage, 100),
-		register:    make(chan *websocket.Conn, 1), // Small buffer
-		unregister:  make(chan *websocket.Conn, 10),
-		stop:        make(chan struct{}),
+		clients:    make(map[*websocket.Conn]*wsClient),
+		broadcast:  make(chan WSMessage, 100),
+		register:   make(chan *websocket.Conn, 1), // Small buffer
+		unregister: make(chan *websocket.Conn, 10),
+		stop:       make(chan struct{}),
 	}
 	go manager.run()
-	
+
 	// Now stop while register might be pending
 	go func() {
 		time.Sleep(10 * time.Millisecond)
 		manager.Stop()
 	}()
-	
+
 	// Register(nil) should return false immediately (nil check)
 	// This tests the non-blocking behavior
 	done := make(chan bool, 1)
@@ -257,7 +257,7 @@ func TestWSManager_StopDuringRegister(t *testing.T) {
 		result := manager.Register(nil)
 		done <- result
 	}()
-	
+
 	select {
 	case result := <-done:
 		// nil connections return false immediately
@@ -271,13 +271,13 @@ func TestWSManager_StopDuringRegister(t *testing.T) {
 
 func TestWSManager_BroadcastMessageEmptyConnections(t *testing.T) {
 	manager := &WSManager{
-		connections: make(map[*websocket.Conn]bool),
-		broadcast:   make(chan WSMessage, 100),
-		register:    make(chan *websocket.Conn, 10),
-		unregister:  make(chan *websocket.Conn, 10),
-		stop:        make(chan struct{}),
+		clients:    make(map[*websocket.Conn]*wsClient),
+		broadcast:  make(chan WSMessage, 100),
+		register:   make(chan *websocket.Conn, 10),
+		unregister: make(chan *websocket.Conn, 10),
+		stop:       make(chan struct{}),
 	}
-	
+
 	// broadcastMessage should handle empty connections gracefully
 	msg := WSMessage{Type: "test", Payload: nil}
 	manager.broadcastMessage(msg)
@@ -286,14 +286,14 @@ func TestWSManager_BroadcastMessageEmptyConnections(t *testing.T) {
 
 func TestWSManager_DoubleStop(t *testing.T) {
 	manager := &WSManager{
-		connections: make(map[*websocket.Conn]bool),
-		broadcast:   make(chan WSMessage, 100),
-		register:    make(chan *websocket.Conn, 10),
-		unregister:  make(chan *websocket.Conn, 10),
-		stop:        make(chan struct{}),
+		clients:    make(map[*websocket.Conn]*wsClient),
+		broadcast:  make(chan WSMessage, 100),
+		register:   make(chan *websocket.Conn, 10),
+		unregister: make(chan *websocket.Conn, 10),
+		stop:       make(chan struct{}),
 	}
 	go manager.run()
-	
+
 	// Multiple stops should be safe
 	var wg sync.WaitGroup
 	for i := 0; i < 10; i++ {
@@ -303,13 +303,13 @@ func TestWSManager_DoubleStop(t *testing.T) {
 			manager.Stop()
 		}()
 	}
-	
+
 	done := make(chan struct{})
 	go func() {
 		wg.Wait()
 		close(done)
 	}()
-	
+
 	select {
 	case <-done:
 		// Good
@@ -321,10 +321,10 @@ func TestWSManager_DoubleStop(t *testing.T) {
 func TestBroadcastNotesUpdated(t *testing.T) {
 	// Test with nil manager
 	BroadcastNotesUpdated(nil)
-	
+
 	// Test with initialized manager
 	manager := &WSManager{
-		connections:    make(map[*websocket.Conn]bool),
+		clients:        make(map[*websocket.Conn]*wsClient),
 		broadcast:      make(chan WSMessage, 100),
 		register:       make(chan *websocket.Conn, 10),
 		unregister:     make(chan *websocket.Conn, 10),
@@ -333,14 +333,14 @@ func TestBroadcastNotesUpdated(t *testing.T) {
 	}
 	go manager.run()
 	defer manager.Stop()
-	
+
 	// Should send to broadcast channel
 	done := make(chan bool, 1)
 	go func() {
 		BroadcastNotesUpdated(manager)
 		done <- true
 	}()
-	
+
 	select {
 	case <-done:
 		// Good
@@ -351,7 +351,7 @@ func TestBroadcastNotesUpdated(t *testing.T) {
 
 func TestWSManager_ConnectionLimit(t *testing.T) {
 	manager := &WSManager{
-		connections:    make(map[*websocket.Conn]bool),
+		clients:        make(map[*websocket.Conn]*wsClient),
 		broadcast:      make(chan WSMessage, 100),
 		register:       make(chan *websocket.Conn, 10),
 		unregister:     make(chan *websocket.Conn, 10),
@@ -363,8 +363,8 @@ func TestWSManager_ConnectionLimit(t *testing.T) {
 
 	// Fill the connection map directly to hit the limit
 	manager.mu.Lock()
-	manager.connections[&websocket.Conn{}] = true
-	manager.connections[&websocket.Conn{}] = true
+	manager.clients[&websocket.Conn{}] = &wsClient{conn: &websocket.Conn{}}
+	manager.clients[&websocket.Conn{}] = &wsClient{conn: &websocket.Conn{}}
 	manager.mu.Unlock()
 
 	// Wait for run() to process
@@ -379,14 +379,14 @@ func TestWSManager_ConnectionLimit(t *testing.T) {
 		// Register(nil) returns false immediately due to nil check
 		// So we test the limit indirectly by verifying len check path
 		manager.mu.RLock()
-		atCapacity := manager.maxConnections > 0 && len(manager.connections) >= manager.maxConnections
+		atCapacity := manager.maxConnections > 0 && len(manager.clients) >= manager.maxConnections
 		manager.mu.RUnlock()
 		if !atCapacity {
 			t.Error("Should be at capacity after adding 2 connections")
 		}
 		done <- true
 	}()
-	
+
 	select {
 	case <-done:
 		// Good
