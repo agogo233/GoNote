@@ -12,8 +12,8 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/stretchr/testify/assert"
 
-	"gonote/internal/models/config"
 	"gonote/internal/models"
+	"gonote/internal/models/config"
 	"gonote/internal/services"
 )
 
@@ -285,4 +285,40 @@ func TestNoteHandler_Move(t *testing.T) {
 		_, err = os.Stat(newPath)
 		assert.NoError(t, err)
 	})
+}
+
+// TestNoteHandler_SaveNoteNamedMove ensures that a note literally named
+// "move.md" is saved through the wildcard route and is not intercepted by
+// the dedicated POST /api/notes/move route.
+func TestNoteHandler_SaveNoteNamedMove(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		Storage: config.StorageConfig{
+			NotesDir: tmpDir,
+		},
+	}
+	svc := services.NewNoteService(tmpDir)
+	handler := NewNoteHandler(svc, cfg)
+
+	app := fiber.New()
+	handler.RegisterRoutes(app.Group("/api"))
+
+	bodyBytes, _ := json.Marshal(map[string]string{"content": "# Move note content"})
+	req := httptest.NewRequest("POST", "/api/notes/move.md", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 200, resp.StatusCode)
+
+	// The note must exist on disk with the saved content
+	saved, err := os.ReadFile(filepath.Join(tmpDir, "move.md"))
+	assert.NoError(t, err)
+	assert.Equal(t, "# Move note content", string(saved))
+
+	// And it must still be readable as a note
+	getReq := httptest.NewRequest("GET", "/api/notes/move.md", nil)
+	getResp, err := app.Test(getReq)
+	assert.NoError(t, err)
+	assert.Equal(t, 200, getResp.StatusCode)
 }

@@ -9,17 +9,17 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	"gonote/internal/models/config"
-	"gonote/internal/models"
-	"gonote/internal/services"
 	"gonote/internal/middleware"
+	"gonote/internal/models"
+	"gonote/internal/models/config"
+	"gonote/internal/services"
 )
 
 type NoteHandler struct {
-	service     *services.NoteService
-	config      *config.Config
-	searchIndex *services.SearchIndex
-	tagService  *services.TagService
+	service      *services.NoteService
+	config       *config.Config
+	searchIndex  *services.SearchIndex
+	tagService   *services.TagService
 	shareService *services.ShareService
 }
 
@@ -102,11 +102,6 @@ func (h *NoteHandler) CreateOrUpdate(c *fiber.Ctx) error {
 		return err
 	}
 
-	// Handle /notes/move specially - redirect to Move handler
-	if notePath == "move" {
-		return h.Move(c)
-	}
-
 	// Parse request body
 	var req struct {
 		Content  string `json:"content"`
@@ -172,7 +167,7 @@ func (h *NoteHandler) Delete(c *fiber.Ctx) error {
 	}
 
 	h.service.InvalidateCache()
-	
+
 	// Also invalidate tag cache if tag service is available
 	if h.tagService != nil {
 		h.tagService.ClearCache()
@@ -215,7 +210,7 @@ func (h *NoteHandler) Move(c *fiber.Ctx) error {
 
 	// Invalidate caches
 	h.service.InvalidateCache()
-	
+
 	// Also invalidate tag cache if tag service is available
 	if h.tagService != nil {
 		h.tagService.ClearCache()
