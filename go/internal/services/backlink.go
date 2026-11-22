@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"gonote/internal/models/logger"
 )
 
 // Pre-compiled regex patterns for performance
@@ -29,9 +31,9 @@ func NewBacklinkService(notesDir string, linkIndex ...*LinkIndex) *BacklinkServi
 
 // BacklinkLink contains information about a single backlink occurrence
 type BacklinkLink struct {
-	Line    int    `json:"line"`     // Line number (1-indexed)
-	Context string `json:"context"`  // Context snippet around the link
-	Type    string `json:"type"`     // Link type: "wikilink" or "markdown"
+	Line    int    `json:"line"`    // Line number (1-indexed)
+	Context string `json:"context"` // Context snippet around the link
+	Type    string `json:"type"`    // Link type: "wikilink" or "markdown"
 }
 
 // BacklinkInfo contains information about a backlink
@@ -237,7 +239,7 @@ func (s *BacklinkService) replaceWikilink(content, oldLinkText, newLinkText stri
 	// Pattern to match wikilinks with optional display text
 	// [[old]] or [[old|display text]]
 	pattern := regexp.MustCompile(`\[\[` + regexp.QuoteMeta(oldLinkText) + `(\|[^\]]+)?\]\]`)
-	
+
 	// Replace with new link text
 	result := pattern.ReplaceAllStringFunc(content, func(match string) string {
 		// Check if there's a display text
@@ -260,7 +262,7 @@ func (s *BacklinkService) replaceWikilink(content, oldLinkText, newLinkText stri
 			start := strings.Index(match, "[[") + 2
 			end := strings.Index(match, "]]")
 			inner := match[start:end]
-			
+
 			var prefix, displayText string
 			if idx := strings.Index(inner, "|"); idx != -1 {
 				displayText = inner[idx:]
@@ -269,7 +271,7 @@ func (s *BacklinkService) replaceWikilink(content, oldLinkText, newLinkText stri
 			if slashIdx := strings.LastIndex(inner, "/"); slashIdx != -1 {
 				prefix = inner[:slashIdx+1]
 			}
-			
+
 			// Replace old name with new name, keeping prefix
 			return "[[" + prefix + newLinkText + displayText + "]]"
 		})
@@ -296,12 +298,12 @@ func (s *BacklinkService) UpdateAllBacklinks(oldPath, newPath string) (int, erro
 
 	for _, backlink := range backlinks {
 		needsUpdate := false
-		
+
 		// Check each link text
 		for _, linkText := range backlink.LinkTexts {
 			// Determine the replacement text
 			var newLinkText string
-			
+
 			if linkText == oldNoteName || linkText == strings.ToLower(oldNoteName) {
 				// Simple name reference -> update to new simple name
 				newLinkText = newNoteName
@@ -319,7 +321,11 @@ func (s *BacklinkService) UpdateAllBacklinks(oldPath, newPath string) (int, erro
 
 			if needsUpdate {
 				if err := s.UpdateWikilinks(backlink.SourcePath, linkText, newLinkText); err != nil {
-					continue // Skip on error
+					// Best-effort rewrite: log and keep going so one bad file does
+					// not abort the whole move. Never roll back the rename here,
+					// since some links may already have been rewritten.
+					logger.Printf("[backlink] failed to update wikilinks in %s (%s -> %s): %v", backlink.SourcePath, linkText, newLinkText, err)
+					continue
 				}
 				updatedCount++
 				break // Only count once per file
@@ -370,7 +376,10 @@ func (s *BacklinkService) UpdateFolderBacklinks(oldFolderPath, newFolderPath str
 
 		// If content changed, write back
 		if updated != contentStr {
-			if err := AtomicWrite(path, []byte(updated), 0644); err == nil {
+			if err := AtomicWrite(path, []byte(updated), 0644); err != nil {
+				// Best-effort rewrite: log and keep walking the remaining notes.
+				logger.Printf("[backlink] failed to write updated note %s: %v", path, err)
+			} else {
 				updatedCount++
 			}
 		}
