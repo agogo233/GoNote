@@ -4991,6 +4991,13 @@ function noteApp() {
             
             // Only set isSaving on first attempt, not during retries
             if (retryCount === 0) {
+                // Mutex: a save is already in flight. Queue a trailing save
+                // (with the freshest mtime) instead of issuing a concurrent
+                // request that would carry a stale mtime and hit 409.
+                if (this.note.isSaving) {
+                    this._saveQueued = true;
+                    return;
+                }
                 this.note.isSaving = true;
                 // Generate a unique save ID for this save operation
                 this._currentSaveId = Date.now() + Math.random();
@@ -5009,6 +5016,7 @@ function noteApp() {
                 this.note.isSaving = false;
                 this._savingNotePath = null;
                 this._currentSaveId = null;
+                this._saveQueued = false;
                 return;
             }
             
@@ -5043,7 +5051,12 @@ function noteApp() {
                     
                     // Update using server-authoritative mtime
                     this.note.modified = data.modified || '';
-                    this.note.dirty = false;
+                    // Only mark clean if the saved content is still current;
+                    // edits made while the save was in flight stay dirty so
+                    // finishSave() re-saves them immediately.
+                    if (contentToSave === this.note.content) {
+                        this.note.dirty = false;
+                    }
                     
                     // Update list cache entry
                     const note = this.notes.find(n => n.path === notePath);
@@ -5068,15 +5081,12 @@ function noteApp() {
                         this.note.lastSaved = false;
                     }, CONFIG.SAVE_INDICATOR_DURATION);
                     
-                    // Clear saving state on success
-                    this.note.isSaving = false;
-                    this._savingNotePath = null;
-                    this._currentSaveId = null;
+                    // Clear saving state on success (may run a queued re-save)
+                    this.finishSave();
                 } else if (response.status === 409) {
-                    // Conflict: note was modified by another source
-                    this.note.isSaving = false;
-                    this._savingNotePath = null;
-                    this._currentSaveId = null;
+                    // Conflict: note was modified by another source.
+                    // Skip the queued re-save so the user decides via the banner.
+                    this.finishSave(true);
                     const data = await response.json().catch(() => ({}));
                     this.showConflictBanner(notePath, data.modified || '');
                 } else {
@@ -5098,12 +5108,28 @@ function noteApp() {
                 
                 // All retries exhausted
                 console.error('Save failed after all retries:', error);
-                this.note.isSaving = false;
-                this._savingNotePath = null;
-                this._currentSaveId = null;
+                this.finishSave();
                 this.showSaveErrorToast();
             }
             // No finally block - isSaving is managed explicitly above
+        },
+
+        // Finalize a save attempt: clear in-flight state, then run a queued
+        // trailing save if another save was requested while this one was in
+        // flight. Covers rapid Ctrl+S (re-save only if content changed again,
+        // i.e. dirty) and the "Keep My Version" forced save (modified === '')
+        // whose saveNote() call may have been absorbed by the in-flight mutex.
+        finishSave(skipQueued = false) {
+            this.note.isSaving = false;
+            this._savingNotePath = null;
+            this._currentSaveId = null;
+            const shouldReSave = this._saveQueued;
+            this._saveQueued = false;
+            if (!skipQueued && shouldReSave) {
+                if (this.note.dirty || this.note.modified === '') {
+                    this.saveNote();
+                }
+            }
         },
 
         // Write draft to localStorage (multi-slot, per-path)
