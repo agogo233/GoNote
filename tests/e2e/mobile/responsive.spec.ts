@@ -84,6 +84,71 @@ test.describe('Mobile Responsive Design', () => {
     }
   });
 
+  test('editor tap is not blocked so the virtual keyboard can open', async ({ page, testPrefix }) => {
+    const noteName = `TouchEditNote_${testPrefix}`;
+    const notePath = `${noteName}.md`;
+    await apiPost(page, `${TEST_CONFIG.baseUrl}/api/notes/${notePath}`, { content: 'touch edit test' });
+
+    // Ensure the app opens in edit mode so the textarea is present on mobile
+    await page.evaluate(() => localStorage.setItem('viewMode', 'edit'));
+    await page.goto(`/${encodeURIComponent(notePath)}`);
+
+    const editor = page.locator('#note-editor');
+    await editor.waitFor({ state: 'visible', timeout: 5000 });
+
+    // Single tap on the textarea must not be preventDefault'ed by app handlers
+    // (that was blocking the virtual keyboard on mobile).
+    const singlePrevented = await editor.evaluate(el => {
+      const ev = new TouchEvent('touchend', { bubbles: true, cancelable: true });
+      el.dispatchEvent(ev);
+      return ev.defaultPrevented;
+    });
+    expect(singlePrevented).toBe(false);
+
+    // Double tap inside the editor must NOT switch to preview and must not
+    // swallow the tap; native word selection keeps working.
+    const doubleResult = await editor.evaluate(async el => {
+      const mk = () => new TouchEvent('touchend', { bubbles: true, cancelable: true });
+      const first = mk();
+      el.dispatchEvent(first);
+      await new Promise(r => setTimeout(r, 50));
+      const second = mk();
+      el.dispatchEvent(second);
+      return {
+        firstPrevented: first.defaultPrevented,
+        secondPrevented: second.defaultPrevented,
+        editorStillVisible: el.offsetParent !== null,
+      };
+    });
+    expect(doubleResult.firstPrevented).toBe(false);
+    expect(doubleResult.secondPrevented).toBe(false);
+    // A double tap inside the editor must keep the editor visible (no view switch)
+    expect(doubleResult.editorStillVisible).toBe(true);
+    await expect(editor).toBeVisible({ timeout: 5000 });
+
+    // Double tap on the preview pane still toggles back to edit mode.
+    // last() = preview button (edit / split(hidden on mobile) / preview order)
+    await page.locator('.flex.rounded-lg.p-1 button').last().click();
+    await expect(page.locator('.markdown-preview')).toBeVisible({ timeout: 5000 });
+    const previewResult = await page.evaluate(async () => {
+      const pv = document.querySelector('.markdown-preview');
+      if (!pv) return null;
+      const mk = () => new TouchEvent('touchend', { bubbles: true, cancelable: true });
+      const first = mk();
+      pv.dispatchEvent(first);
+      await new Promise(r => setTimeout(r, 50));
+      const second = mk();
+      pv.dispatchEvent(second);
+      return { prevented: second.defaultPrevented };
+    });
+    expect(previewResult).not.toBeNull();
+    // The second tap of the double tap is intentionally swallowed to avoid
+    // the native double-tap zoom on the preview pane
+    expect(previewResult!.prevented).toBe(true);
+    // After the double tap the view mode switches to edit: editor becomes visible again
+    await editor.waitFor({ state: 'visible', timeout: 5000 });
+  });
+
   test('touch interactions work', async ({ page }) => {
     const body = page.locator('body');
     await expect(body).toBeVisible();

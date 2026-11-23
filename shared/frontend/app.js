@@ -7036,17 +7036,21 @@ function noteApp() {
         
         // Additional touch enhancements for mobile
         setupTouchEnhancements() {
-            // Double tap to toggle edit/preview mode on mobile
+            // Double tap on the preview pane to toggle edit/preview mode on mobile.
+            // Restricted to .markdown-preview so that double tap inside the editor
+            // keeps the native word-selection behavior (and the keyboard stays up).
+            // Interactive elements (links, buttons, form controls) are excluded;
+            // double tap on rich content (images, code blocks) toggles the view.
             let lastTapTime = 0;
             const DOUBLE_TAP_DELAY = 300;
             
             document.addEventListener('touchend', (e) => {
                 if (window.innerWidth > 768) return;
                 
-                // Only in editor/preview area
+                // Only in the preview pane, never on form controls
                 const target = e.target;
-                const isEditorArea = target.closest('.editor-textarea, .markdown-preview, .editor-wrapper');
-                if (!isEditorArea) return;
+                const isPreviewPane = target.closest('.markdown-preview') && !target.closest('input, textarea, select, button, a');
+                if (!isPreviewPane) return;
                 
                 const currentTime = new Date().getTime();
                 const tapLength = currentTime - lastTapTime;
@@ -7056,8 +7060,10 @@ function noteApp() {
                     if (this.note.current) {
                         this.ui.viewMode = this.ui.viewMode === 'edit' ? 'preview' : 'edit';
                         if (navigator.vibrate) navigator.vibrate(10);
+                        // Swallow the second tap so it does not trigger the
+                        // native double-tap zoom / word selection on the preview
+                        e.preventDefault();
                     }
-                    e.preventDefault();
                 }
                 
                 lastTapTime = currentTime;
@@ -7079,17 +7085,6 @@ function noteApp() {
                 const activeElements = document.querySelectorAll('.touch-active');
                 activeElements.forEach(el => el.classList.remove('touch-active'));
             }, { passive: true });
-            
-            // Prevent zoom on double tap for form inputs (iOS)
-            document.addEventListener('touchend', (e) => {
-                const now = Date.now();
-                if (now - lastTapTime <= 300) {
-                    const isInput = e.target.matches('input, textarea, select');
-                    if (isInput) {
-                        e.preventDefault();
-                    }
-                }
-            }, { passive: false });
         },
         
         // Save editor width to localStorage

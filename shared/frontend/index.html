@@ -1449,6 +1449,11 @@
                 touch-action: manipulation;
             }
             
+            /* Prevent iOS double-tap zoom on form controls (native, keeps keyboard working) */
+            input, textarea, select {
+                touch-action: manipulation;
+            }
+            
             /* Homepage cards - touch friendly */
             .homepage-card {
                 min-height: 80px !important;
